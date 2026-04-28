@@ -2,9 +2,10 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Eye, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Eye, Heart, MessageCircle, Send } from "lucide-react";
 import { type Problem, type ProblemComment } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
+import { isConfirmedLocally, isFollowedLocally, rememberConfirmedProblem, rememberFollowedProblem } from "@/lib/local-actions";
 import { getTelegramDisplayName, getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
 function getPhotos(problem: Problem) {
@@ -71,7 +72,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       setMessage(data.message);
       setProblem((current) => current ? { ...current, confirmations_count: data.confirmations_count } : current);
       setConfirmed(true);
-      localStorage.setItem(`problem_confirmed_${params.id}`, "1");
+      rememberConfirmedProblem(params.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось подтвердить проблему");
     }
@@ -94,7 +95,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       if (!response.ok) throw new Error(data.error);
       setMessage(data.message);
       setSubscribed(true);
-      localStorage.setItem(`problem_subscribed_${params.id}`, "1");
+      rememberFollowedProblem(params.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось добавить проблему в отслеживаемые.");
     }
@@ -133,8 +134,8 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   }
 
   useEffect(() => {
-    setConfirmed(localStorage.getItem(`problem_confirmed_${params.id}`) === "1");
-    setSubscribed(localStorage.getItem(`problem_subscribed_${params.id}`) === "1");
+    setConfirmed(isConfirmedLocally(params.id));
+    setSubscribed(isFollowedLocally(params.id));
     void load();
   }, [params.id]);
 
@@ -180,40 +181,38 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
 
         <section className="px-4 py-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <button
-                onClick={confirm}
-                className={`inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold ${
-                  confirmed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
-                }`}
-              >
-                <CheckCircle2 className={`h-5 w-5 ${confirmed ? "fill-brand/15 text-brand" : ""}`} />
-                {confirmed ? "Подтверждено" : "Меня касается"}
-              </button>
-              <button
-                onClick={() => commentInputRef.current?.focus()}
-                className="inline-flex h-9 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[11px] font-semibold text-ink"
-              >
-                <MessageCircle className="h-5 w-5" />
-                Комм.
-              </button>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <button
                 onClick={subscribe}
-                className={`inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold ${
+                className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[10px] font-semibold ${
                   subscribed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
                 }`}
               >
-                <Eye className={`h-5 w-5 ${subscribed ? "fill-brand/15 text-brand" : ""}`} />
+                <Eye className={`h-4 w-4 ${subscribed ? "fill-brand/15 text-brand" : ""}`} />
                 {subscribed ? "Слежу" : "Следить"}
+              </button>
+              <button
+                onClick={confirm}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink"
+                aria-label="Поддержать"
+              >
+                <Heart className={`h-4 w-4 ${confirmed ? "fill-brand text-brand" : ""}`} />
+              </button>
+              <button
+                onClick={() => commentInputRef.current?.focus()}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink"
+                aria-label="Комментарии"
+              >
+                <MessageCircle className="h-4 w-4" />
               </button>
             </div>
             <a
               href={getTelegramShareUrl(shareText)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[11px] font-semibold text-ink"
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[10px] font-semibold text-ink"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-3.5 w-3.5" />
               Поделиться
             </a>
           </div>

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, MapPin, MessageCircle, MoreHorizontal, Send } from "lucide-react";
+import { Eye, Heart, MapPin, MessageCircle, MoreHorizontal, Send } from "lucide-react";
 import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
+import { isConfirmedLocally, isFollowedLocally, rememberConfirmedProblem, rememberFollowedProblem } from "@/lib/local-actions";
 import { getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
 function getPhotos(problem: Problem) {
@@ -22,15 +23,18 @@ export function ProblemCard({
 }) {
   const [count, setCount] = useState(problem.confirmations_count);
   const [busy, setBusy] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [followed, setFollowed] = useState(false);
   const [notice, setNotice] = useState("");
   const photos = getPhotos(problem);
   const hasPhotos = photos.length > 0;
 
   useEffect(() => {
     setCount(problem.confirmations_count);
-    setConfirmed(localStorage.getItem(`problem_confirmed_${problem.id}`) === "1");
-  }, [problem.confirmations_count]);
+    setConfirmed(isConfirmedLocally(problem.id));
+    setFollowed(isFollowedLocally(problem.id));
+  }, [problem.confirmations_count, problem.id]);
 
   const shareText = useMemo(() => {
     return `Проблема есть: ${problem.title}
@@ -64,7 +68,7 @@ export function ProblemCard({
       setCount(data.confirmations_count);
       onConfirmed?.(problem.id, data.confirmations_count);
       setConfirmed(true);
-      localStorage.setItem(`problem_confirmed_${problem.id}`, "1");
+      rememberConfirmedProblem(problem.id);
       setNotice(data.alreadyConfirmed ? "Вы уже подтверждали эту проблему." : "Вы подтвердили проблему.");
     } catch (error) {
       setCount(previousCount);
@@ -72,6 +76,34 @@ export function ProblemCard({
       setNotice(error instanceof Error ? error.message : "Не удалось подтвердить проблему.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function followProblem() {
+    if (followBusy) return;
+    setFollowBusy(true);
+    setNotice("");
+    setFollowed(true);
+    rememberFollowedProblem(problem.id);
+
+    try {
+      const identity = await getTelegramIdentity();
+      const response = await fetch(`/api/problems/${problem.id}/subscribe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          telegram_user_id: identity.telegramUserId,
+          anonymous_key: identity.anonymousKey
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setNotice(data.alreadySubscribed ? "Вы уже следите за этой проблемой." : "Проблема добавлена в отслеживаемые.");
+    } catch (error) {
+      setFollowed(isFollowedLocally(problem.id));
+      setNotice(error instanceof Error ? error.message : "Не удалось добавить проблему в отслеживаемые.");
+    } finally {
+      setFollowBusy(false);
     }
   }
 
@@ -121,29 +153,41 @@ export function ProblemCard({
         ) : null}
 
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <button
+              onClick={followProblem}
+              disabled={followBusy}
+              className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[10px] font-semibold disabled:opacity-50 ${
+                followed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
+              }`}
+              aria-label="Следить"
+            >
+              <Eye className={`h-4 w-4 ${followed ? "fill-brand/15 text-brand" : ""}`} />
+              {followed ? "Слежу" : "Следить"}
+            </button>
             <button
               onClick={confirmProblem}
               disabled={busy}
-              className={`inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold disabled:opacity-50 ${
-                confirmed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
-              }`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink disabled:opacity-50"
+              aria-label="Поддержать"
             >
-              <CheckCircle2 className={`h-5 w-5 ${confirmed || count > problem.confirmations_count ? "fill-brand/15 text-brand" : ""}`} />
-              {confirmed ? "Подтверждено" : "Меня касается"}
+              <Heart className={`h-4 w-4 ${confirmed || count > problem.confirmations_count ? "fill-brand text-brand" : ""}`} />
             </button>
-            <Link href={`/problems/${problem.id}`} className="inline-flex h-9 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[11px] font-semibold text-ink">
-              <MessageCircle className="h-5 w-5" />
-              Комм.
+            <Link
+              href={`/problems/${problem.id}`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink"
+              aria-label="Комментарии"
+            >
+              <MessageCircle className="h-4 w-4" />
             </Link>
           </div>
           <a
             href={getTelegramShareUrl(shareText)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[11px] font-semibold text-ink"
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[10px] font-semibold text-ink"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-3.5 w-3.5" />
             Поделиться
           </a>
         </div>

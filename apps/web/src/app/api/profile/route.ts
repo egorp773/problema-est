@@ -60,6 +60,17 @@ function fallbackProblemId(row: { problem_id?: string | null }) {
   return row.problem_id || "";
 }
 
+function parseIds(value: string | null) {
+  return Array.from(
+    new Set(
+      String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => /^[0-9a-f-]{36}$/i.test(item))
+    )
+  ).slice(0, 100);
+}
+
 function uniqueById<T extends { id: string }>(items: T[]) {
   const map = new Map<string, T>();
   for (const item of items) map.set(item.id, item);
@@ -110,6 +121,23 @@ async function loadCreatedProblems(telegramUserId: string | null, anonymousKey: 
   }
 
   return uniqueById(problems).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+}
+
+async function loadProblemsByIds(ids: string[], publicOnly: boolean) {
+  if (ids.length === 0) return [];
+
+  const supabase = getSupabaseAdmin();
+  let query = supabase
+    .from("problems")
+    .select(problemSelect)
+    .in("id", ids)
+    .order("created_at", { ascending: false });
+
+  if (publicOnly) query = query.in("status", [...PUBLIC_STATUSES]);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as ProfileProblem[];
 }
 
 async function loadProblemIdsFromTable(table: "confirmations" | "subscriptions", telegramUserId: string | null, anonymousKey: string | null) {
@@ -184,18 +212,7 @@ async function loadProblemIdsFromTable(table: "confirmations" | "subscriptions",
 }
 
 async function loadPublicProblemsByIds(ids: string[]) {
-  if (ids.length === 0) return [];
-
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("problems")
-    .select(problemSelect)
-    .in("id", ids)
-    .in("status", [...PUBLIC_STATUSES])
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return (data ?? []) as unknown as ProfileProblem[];
+  return loadProblemsByIds(ids, true);
 }
 
 export async function GET(request: Request) {
@@ -203,21 +220,31 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const telegramUserId = searchParams.get("telegram_user_id")?.trim() || null;
     const anonymousKey = searchParams.get("anonymous_key")?.trim() || null;
+    const localCreatedIds = parseIds(searchParams.get("created_ids"));
+    const localConfirmedIds = parseIds(searchParams.get("confirmed_ids"));
+    const localFollowedIds = parseIds(searchParams.get("followed_ids"));
 
     if (!telegramUserId && !anonymousKey) {
       return NextResponse.json({ error: "Не удалось определить пользователя." }, { status: 400 });
     }
 
-    const [createdProblems, confirmedIds, followedIds] = await Promise.all([
+    const [createdByIdentity, confirmedIdsFromDb, followedIdsFromDb] = await Promise.all([
       loadCreatedProblems(telegramUserId, anonymousKey),
       loadProblemIdsFromTable("confirmations", telegramUserId, anonymousKey),
       loadProblemIdsFromTable("subscriptions", telegramUserId, anonymousKey)
     ]);
 
-    const [confirmedProblems, followedProblems] = await Promise.all([
+    const confirmedIds = Array.from(new Set([...confirmedIdsFromDb, ...localConfirmedIds]));
+    const followedIds = Array.from(new Set([...followedIdsFromDb, ...localFollowedIds]));
+
+    const [createdByLocalIds, confirmedProblems, followedProblems] = await Promise.all([
+      loadProblemsByIds(localCreatedIds, false),
       loadPublicProblemsByIds(confirmedIds),
       loadPublicProblemsByIds(followedIds)
     ]);
+
+    const createdProblems = uniqueById([...createdByIdentity, ...createdByLocalIds])
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 
     const resolvedCount = createdProblems.filter((problem) => problem.status === "resolved").length;
 
@@ -225,8 +252,8 @@ export async function GET(request: Request) {
       {
         stats: {
           created: createdProblems.length,
-          confirmed: confirmedIds.length,
-          followed: followedIds.length,
+          confirmed: confirmedProblems.length,
+          followed: followedProblems.length,
           resolved: resolvedCount
         },
         createdProblems,

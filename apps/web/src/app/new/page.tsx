@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ImagePlus, Send, X } from "lucide-react";
 import { CATEGORIES, type ProblemCategory } from "@problema-est/shared";
 import { getLocalCitySuggestions, mergeSuggestions } from "@/lib/geo";
+import { rememberCreatedProblem } from "@/lib/local-actions";
 import { getTelegramIdentity } from "@/lib/telegram";
 
 type ProblemForm = {
@@ -156,6 +157,7 @@ export default function NewProblemPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      if (data.problem?.id) rememberCreatedProblem(String(data.problem.id));
 
       setMessage("Проблема отправлена на модерацию. После проверки её смогут подтвердить другие люди.");
       setForm({

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Eye, FileText, Loader2, Plus, UserRound } from "lucide-react";
 import { PUBLIC_STATUSES, type Problem, type ProblemStatus } from "@problema-est/shared";
 import { labelStatus } from "@/lib/format";
+import { listConfirmedProblemIds, listCreatedProblemIds, listFollowedProblemIds } from "@/lib/local-actions";
 import { ensureAnonymousKey, getTelegramDisplayName, waitForTelegramUser, type TelegramUser } from "@/lib/telegram";
 
 type ProfileStats = {
@@ -67,6 +68,9 @@ export default function ProfilePage() {
 
       if (telegramUserId) params.set("telegram_user_id", telegramUserId);
       params.set("anonymous_key", anonymousKey);
+      params.set("created_ids", listCreatedProblemIds().join(","));
+      params.set("confirmed_ids", listConfirmedProblemIds().join(","));
+      params.set("followed_ids", listFollowedProblemIds().join(","));
       setUser(telegramUser);
 
       const response = await fetch(`/api/profile?${params.toString()}`, {
