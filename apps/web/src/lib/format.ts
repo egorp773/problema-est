@@ -5,5 +5,5 @@ export function labelStatus(status: ProblemStatus | string) {
 }
 
 export function appUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return process.env.NEXT_PUBLIC_APP_URL || "https://problema-est-web.vercel.app";
 }
