@@ -9,3 +9,6 @@ npm-debug.log*
 coverage
 next-dev.log
 *.tsbuildinfo
+
+.vercel
+.env*.local
