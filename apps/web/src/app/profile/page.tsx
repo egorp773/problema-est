@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Eye, FileText, Loader2, Plus, UserRound } from "lucide-react";
 import { PUBLIC_STATUSES, type Problem, type ProblemStatus } from "@problema-est/shared";
 import { labelStatus } from "@/lib/format";
-import { ensureAnonymousKey, getTelegramDisplayName, getTelegramUser, getTelegramUserId, type TelegramUser } from "@/lib/telegram";
+import { ensureAnonymousKey, getTelegramDisplayName, waitForTelegramUser, type TelegramUser } from "@/lib/telegram";
 
 type ProfileStats = {
   created: number;
@@ -60,8 +60,8 @@ export default function ProfilePage() {
     setError("");
 
     try {
-      const telegramUser = getTelegramUser();
-      const telegramUserId = getTelegramUserId();
+      const telegramUser = await waitForTelegramUser();
+      const telegramUserId = telegramUser?.id ? String(telegramUser.id) : null;
       const anonymousKey = ensureAnonymousKey();
       const params = new URLSearchParams();
 
@@ -118,7 +118,7 @@ export default function ProfilePage() {
           )}
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-bold text-ink">{displayName}</h1>
-            {username ? <p className="mt-1 truncate text-sm font-semibold text-brand">{username}</p> : null}
+            <p className="mt-1 truncate text-sm font-semibold text-brand">{username || "username не указан"}</p>
             <p className="mt-1 text-sm leading-5 text-muted">Ваш вклад в проблемы, которые становятся видимыми.</p>
           </div>
         </div>

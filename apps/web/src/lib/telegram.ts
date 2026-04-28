@@ -34,6 +34,19 @@ export function getTelegramUser(): TelegramUser | null {
   return window.Telegram?.WebApp?.initDataUnsafe?.user ?? null;
 }
 
+export async function waitForTelegramUser(timeoutMs = 1200): Promise<TelegramUser | null> {
+  if (typeof window === "undefined") return null;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const user = getTelegramUser();
+    if (user?.id || user?.first_name || user?.username || user?.photo_url) return user;
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
+
+  return getTelegramUser();
+}
+
 export function getTelegramDisplayName(user: TelegramUser | null) {
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim();
   return name || "Пользователь";
