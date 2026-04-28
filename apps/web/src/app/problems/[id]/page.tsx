@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Eye, MessageCircle, Send } from "lucide-react";
-import { type Problem } from "@problema-est/shared";
+import { type Problem, type ProblemComment } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
-import { ensureAnonymousKey, getTelegramShareUrl, getTelegramUserId } from "@/lib/telegram";
+import { getTelegramDisplayName, getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
 function getPhotos(problem: Problem) {
   const photos = Array.isArray(problem.photo_urls) ? problem.photo_urls.filter(Boolean) : [];
@@ -15,9 +15,13 @@ function getPhotos(problem: Problem) {
 
 export default function ProblemPage({ params }: { params: { id: string } }) {
   const [problem, setProblem] = useState<Problem | null>(null);
+  const [comments, setComments] = useState<ProblemComment[]>([]);
+  const [commentText, setCommentText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [commentBusy, setCommentBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const shareText = useMemo(() => {
     if (!problem) return "";
@@ -29,10 +33,17 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   async function load() {
     setLoading(true);
     try {
-      const response = await fetch(`/api/problems/${params.id}`, { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      const [problemResponse, commentsResponse] = await Promise.all([
+        fetch(`/api/problems/${params.id}`, { cache: "no-store" }),
+        fetch(`/api/problems/${params.id}/comments`, { cache: "no-store" })
+      ]);
+
+      const data = await problemResponse.json();
+      if (!problemResponse.ok) throw new Error(data.error);
       setProblem(data.problem);
+
+      const commentsData = await commentsResponse.json();
+      if (commentsResponse.ok) setComments(commentsData.comments ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Проблема не найдена");
     } finally {
@@ -44,13 +55,13 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     setMessage("");
     setError("");
     try {
-      const telegramUserId = getTelegramUserId();
+      const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${params.id}/confirm`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          telegram_user_id: telegramUserId,
-          anonymous_key: telegramUserId ? null : ensureAnonymousKey()
+          telegram_user_id: identity.telegramUserId,
+          anonymous_key: identity.anonymousKey
         })
       });
       const data = await response.json();
@@ -66,13 +77,13 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     setMessage("");
     setError("");
     try {
-      const telegramUserId = getTelegramUserId();
+      const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${params.id}/subscribe`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          telegram_user_id: telegramUserId,
-          anonymous_key: telegramUserId ? null : ensureAnonymousKey()
+          telegram_user_id: identity.telegramUserId,
+          anonymous_key: identity.anonymousKey
         })
       });
       const data = await response.json();
@@ -80,6 +91,38 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       setMessage(data.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось добавить проблему в отслеживаемые.");
+    }
+  }
+
+  async function submitComment(event: FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    setCommentBusy(true);
+
+    try {
+      const identity = await getTelegramIdentity();
+      const response = await fetch(`/api/problems/${params.id}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          body: commentText,
+          display_name: getTelegramDisplayName(identity.user),
+          avatar_url: identity.user?.photo_url ?? null,
+          telegram_user_id: identity.telegramUserId,
+          anonymous_key: identity.anonymousKey
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      setComments((current) => [...current, data.comment]);
+      setCommentText("");
+      setMessage("Комментарий опубликован.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось сохранить комментарий.");
+    } finally {
+      setCommentBusy(false);
     }
   }
 
@@ -134,7 +177,10 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
                 <CheckCircle2 className="h-7 w-7" />
                 Меня касается
               </button>
-              <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
+              <button
+                onClick={() => commentInputRef.current?.focus()}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink"
+              >
                 <MessageCircle className="h-7 w-7" />
                 Коммент.
               </button>
@@ -162,16 +208,73 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
             <p className="mt-2 leading-7 text-slate-800">{problem.desired_result}</p>
           </div>
 
-          <div className="mt-4 rounded-xl border border-dashed border-line p-4">
-            <p className="text-sm font-semibold text-ink">Комментарии</p>
-            <p className="mt-1 text-sm text-muted">В MVP комментарии пока не сохраняются. Сейчас основной сигнал — подтверждения и репосты.</p>
-          </div>
+          <section className="mt-4 rounded-xl border border-line bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-ink">Комментарии</h2>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-muted">
+                {comments.length}
+              </span>
+            </div>
+
+            <form onSubmit={submitComment} className="mt-3 grid gap-2">
+              <textarea
+                ref={commentInputRef}
+                rows={3}
+                required
+                minLength={2}
+                maxLength={1000}
+                className="rounded-xl border border-line px-3 py-3 text-sm leading-6 outline-none focus:border-brand"
+                placeholder="Напишите комментарий"
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+              />
+              <button
+                disabled={commentBusy || commentText.trim().length < 2}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {commentBusy ? "Отправляем..." : "Отправить комментарий"}
+              </button>
+              <p className="text-xs text-muted">Публично будут видны только имя, аватар и текст. Username и Telegram ID не показываются.</p>
+            </form>
+
+            <div className="mt-4 grid gap-3">
+              {comments.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 p-3 text-sm text-muted">Комментариев пока нет.</p>
+              ) : (
+                comments.map((comment) => <CommentItem key={comment.id} comment={comment} />)
+              )}
+            </div>
+          </section>
 
           {message ? <p className="mt-4 rounded-lg bg-teal-50 p-3 text-sm text-brand">{message}</p> : null}
           {error ? <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
         </section>
       </article>
     </main>
+  );
+}
+
+function CommentItem({ comment }: { comment: ProblemComment }) {
+  return (
+    <article className="flex gap-3 rounded-xl bg-slate-50 p-3">
+      {comment.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={comment.avatar_url} alt={comment.display_name} className="h-10 w-10 rounded-full object-cover" loading="lazy" />
+      ) : (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-sm font-bold text-brand">
+          {comment.display_name.trim().slice(0, 1).toUpperCase() || "П"}
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold text-ink">{comment.display_name || "Пользователь"}</p>
+          <time className="text-xs text-muted" dateTime={comment.created_at}>
+            {new Date(comment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })}
+          </time>
+        </div>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{comment.body}</p>
+      </div>
+    </article>
   );
 }
 

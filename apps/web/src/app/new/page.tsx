@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ImagePlus, Send, X } from "lucide-react";
 import { CATEGORIES, type ProblemCategory } from "@problema-est/shared";
 import { getLocalCitySuggestions, mergeSuggestions } from "@/lib/geo";
-import { ensureAnonymousKey, getTelegramUserId } from "@/lib/telegram";
+import { getTelegramIdentity } from "@/lib/telegram";
 
 type ProblemForm = {
   city: string;
@@ -142,7 +142,7 @@ export default function NewProblemPage() {
 
     try {
       const uploadedPhotoUrls = await uploadPhotos();
-      const telegramUserId = getTelegramUserId();
+      const identity = await getTelegramIdentity();
       const response = await fetch("/api/problems", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -150,8 +150,8 @@ export default function NewProblemPage() {
           ...form,
           photo_url: uploadedPhotoUrls[0] || "",
           photo_urls: uploadedPhotoUrls,
-          created_by_telegram_id: telegramUserId,
-          created_by_anonymous_key: telegramUserId ? null : ensureAnonymousKey()
+          created_by_telegram_id: identity.telegramUserId,
+          created_by_anonymous_key: identity.anonymousKey
         })
       });
       const data = await response.json();

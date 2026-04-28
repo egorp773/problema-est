@@ -59,6 +59,15 @@ export type Problem = {
   created_by_anonymous_key?: string | null;
 };
 
+export type ProblemComment = {
+  id: string;
+  created_at: string;
+  problem_id: string;
+  body: string;
+  display_name: string;
+  avatar_url: string | null;
+};
+
 export const statusLabel: Record<ProblemStatus, string> = {
   pending: "На модерации",
   published: "Опубликовано",

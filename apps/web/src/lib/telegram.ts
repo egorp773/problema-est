@@ -47,6 +47,17 @@ export async function waitForTelegramUser(timeoutMs = 1200): Promise<TelegramUse
   return getTelegramUser();
 }
 
+export async function getTelegramIdentity(timeoutMs = 1200) {
+  const user = await waitForTelegramUser(timeoutMs);
+  const telegramUserId = user?.id ? String(user.id) : null;
+
+  return {
+    user,
+    telegramUserId,
+    anonymousKey: telegramUserId ? null : ensureAnonymousKey()
+  };
+}
+
 export function getTelegramDisplayName(user: TelegramUser | null) {
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim();
   return name || "Пользователь";

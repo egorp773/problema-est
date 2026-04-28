@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, MapPin, MessageCircle, MoreHorizontal, Send } from "lucide-react";
 import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
-import { ensureAnonymousKey, getTelegramShareUrl, getTelegramUserId } from "@/lib/telegram";
+import { getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
 function getPhotos(problem: Problem) {
   const photos = Array.isArray(problem.photo_urls) ? problem.photo_urls.filter(Boolean) : [];
@@ -47,13 +47,13 @@ export function ProblemCard({
     onConfirmed?.(problem.id, optimisticCount);
 
     try {
-      const telegramUserId = getTelegramUserId();
+      const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${problem.id}/confirm`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          telegram_user_id: telegramUserId,
-          anonymous_key: telegramUserId ? null : ensureAnonymousKey()
+          telegram_user_id: identity.telegramUserId,
+          anonymous_key: identity.anonymousKey
         })
       });
       const data = await response.json();
