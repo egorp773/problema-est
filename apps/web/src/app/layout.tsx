@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Проблема есть",
-  description: "Telegram Mini App для публикации и подтверждения городских проблем"
+  description: "Telegram Mini App для публикации и поддержки городских проблем"
 };
 
 export const viewport: Viewport = {

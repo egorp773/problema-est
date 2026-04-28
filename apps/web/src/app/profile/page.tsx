@@ -226,7 +226,7 @@ function ProblemRow({ problem, tab }: { problem: Problem; tab: Tab }) {
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-ink">{problem.confirmations_count} подтверждений</p>
+        <p className="text-sm font-semibold text-ink">{problem.confirmations_count} лайков</p>
         {publicProblem ? (
           <Link href={`/problems/${problem.id}`} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-brand px-4 text-sm font-semibold text-white">
             Открыть

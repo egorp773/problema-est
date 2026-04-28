@@ -39,8 +39,8 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   const shareText = useMemo(() => {
     if (!problem) return "";
     return `Проблема есть: ${problem.title}
-Эту проблему уже подтвердили ${problem.confirmations_count} человек.
-Подтверди, если тебя тоже касается: ${appUrl()}/problems/${problem.id}`;
+У этой проблемы уже ${problem.confirmations_count} лайков.
+Поддержи или начни следить: ${appUrl()}/problems/${problem.id}`;
   }, [problem]);
 
   async function load() {
@@ -274,7 +274,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
             </a>
           </div>
 
-          <p className="mt-4 text-sm font-semibold text-ink">{problem.confirmations_count} подтверждений</p>
+          <p className="mt-4 text-sm font-semibold text-ink">{problem.confirmations_count} лайков</p>
           <p className="mt-2 text-base leading-7 text-slate-800">{problem.clean_description}</p>
 
           <div className="mt-4 rounded-xl bg-slate-50 p-4">

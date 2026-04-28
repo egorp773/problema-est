@@ -45,8 +45,8 @@ export function ProblemCard({
 
   const shareText = useMemo(() => {
     return `Проблема есть: ${problem.title}
-Эту проблему уже подтвердили ${count} человек.
-Подтверди, если тебя тоже касается: ${appUrl()}/problems/${problem.id}`;
+У этой проблемы уже ${count} лайков.
+Поддержи или начни следить: ${appUrl()}/problems/${problem.id}`;
   }, [count, problem.id, problem.title]);
 
   async function confirmProblem() {
@@ -148,7 +148,7 @@ export function ProblemCard({
           <div className="flex aspect-square w-full flex-col justify-between bg-gradient-to-br from-teal-50 via-white to-slate-100 p-5">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand">
               <span>{problem.category}</span>
-              <span>{count} подтверждений</span>
+              <span>{count} лайков</span>
             </div>
             <h3 className="text-3xl font-bold leading-tight text-ink">{problem.title}</h3>
             <p className="line-clamp-3 text-sm leading-6 text-slate-700">{problem.clean_description}</p>
@@ -161,7 +161,7 @@ export function ProblemCard({
           <div className="mb-3 border-b border-line pb-3">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand">
               <span>{problem.category}</span>
-              <span>{count} подтверждений</span>
+              <span>{count} лайков</span>
             </div>
             <h3 className="text-2xl font-bold leading-tight text-ink">{problem.title}</h3>
             <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-700">{problem.clean_description}</p>
@@ -208,7 +208,7 @@ export function ProblemCard({
           </a>
         </div>
 
-        <p className="mt-3 text-sm font-semibold text-ink">{count} подтверждений</p>
+        <p className="mt-3 text-sm font-semibold text-ink">{count} лайков</p>
         {!hasPhotos ? (
           <Link href={`/problems/${problem.id}`} className="mt-2 inline-block text-sm text-muted">
             Открыть детали и обсуждение

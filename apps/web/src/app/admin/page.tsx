@@ -286,7 +286,7 @@ function AdminProblem({
           </div>
           <h2 className="mt-3 text-2xl font-bold leading-tight text-ink">{problem.title || "Без заголовка"}</h2>
           <p className="mt-1 text-sm text-muted">
-            {problem.city || "Город не указан"} · {problem.address || "Адрес не указан"} · {problem.confirmations_count} подтверждений
+            {problem.city || "Город не указан"} · {problem.address || "Адрес не указан"} · {problem.confirmations_count} лайков
           </p>
         </div>
 
