@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CATEGORIES, STATUSES, type Problem, type ProblemStatus } from "@problema-est/shared";
 import { Check, RefreshCw, Save, X } from "lucide-react";
 import { labelStatus } from "@/lib/format";
@@ -31,13 +31,12 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const getAdminPassword = useCallback(() => {
-    if (typeof window === "undefined") return password.trim();
+  function getPassword() {
     return password.trim() || sessionStorage.getItem(passwordKey) || "";
-  }, [password]);
+  }
 
-  const load = useCallback(async (pass = getAdminPassword(), nextFilter = filter) => {
-    if (!pass.trim()) {
+  async function load(nextFilter = filter, pass = getPassword()) {
+    if (!pass) {
       setError("Введите ADMIN_PASSWORD.");
       return;
     }
@@ -52,16 +51,14 @@ export default function AdminPage() {
         headers: { "x-admin-password": pass }
       });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Не удалось загрузить заявки.");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Не удалось загрузить заявки.");
-      }
-
+      setPassword(pass);
+      sessionStorage.setItem(passwordKey, pass);
       setProblems(data.problems ?? []);
       setCounts(data.counts ?? {});
       setTotal(data.total ?? 0);
       setLoggedIn(true);
-      sessionStorage.setItem(passwordKey, pass);
     } catch (err) {
       setLoggedIn(false);
       setProblems([]);
@@ -69,37 +66,46 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, getAdminPassword]);
+  }
 
   async function save(problem: Problem, patch: Partial<Problem>) {
-    const adminPassword = getAdminPassword();
-    if (!adminPassword) {
+    const pass = getPassword();
+    if (!pass) {
       setError("Введите ADMIN_PASSWORD и нажмите «Войти / обновить».");
       return;
     }
 
+    setSavingId(problem.id);
     setError("");
     setMessage("");
-    setSavingId(problem.id);
 
     try {
       const response = await fetch(`/api/admin/problems/${problem.id}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
-          "x-admin-password": adminPassword
+          "x-admin-password": pass
         },
         body: JSON.stringify(patch)
       });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Не удалось сохранить изменения.");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Не удалось сохранить изменения.");
-      }
-
-      setPassword(adminPassword);
-      setMessage("Изменения сохранены.");
-      await load(adminPassword, filter);
+      const updated = data.problem as Problem;
+      setCounts((current) => {
+        const next = { ...current };
+        if (problem.status !== updated.status) {
+          next[problem.status] = Math.max((next[problem.status] ?? 1) - 1, 0);
+          next[updated.status] = (next[updated.status] ?? 0) + 1;
+        }
+        return next;
+      });
+      setProblems((items) => {
+        const mapped = items.map((item) => (item.id === updated.id ? updated : item));
+        if (filter === "all") return mapped;
+        return mapped.filter((item) => item.status === filter);
+      });
+      setMessage(`Сохранено: ${labelStatus(updated.status)}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось сохранить изменения.");
     } finally {
@@ -107,24 +113,16 @@ export default function AdminPage() {
     }
   }
 
-  function login() {
-    void load(password.trim(), filter);
-  }
-
   function changeFilter(nextFilter: AdminFilter) {
     setFilter(nextFilter);
-    if (loggedIn) {
-      void load(getAdminPassword(), nextFilter);
-    }
+    if (loggedIn) void load(nextFilter);
   }
 
   useEffect(() => {
     const saved = sessionStorage.getItem(passwordKey);
-    if (saved) {
-      setPassword(saved);
-      void load(saved, "pending");
-    }
-  }, [load]);
+    if (saved) void load("pending", saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 py-6">
@@ -149,11 +147,11 @@ export default function AdminPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") login();
+            if (event.key === "Enter") void load();
           }}
         />
         <button
-          onClick={login}
+          onClick={() => void load()}
           disabled={loading}
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-5 font-semibold text-white disabled:opacity-60"
         >
@@ -213,10 +211,9 @@ function AdminProblem({
   onSave: (problem: Problem, patch: Partial<Problem>) => void;
 }) {
   const [draft, setDraft] = useState(problem);
+  const riskFlags = useMemo(() => (Array.isArray(problem.risk_flags) ? problem.risk_flags : []), [problem.risk_flags]);
 
   useEffect(() => setDraft(problem), [problem]);
-
-  const riskFlags = useMemo(() => (Array.isArray(problem.risk_flags) ? problem.risk_flags : []), [problem.risk_flags]);
 
   function draftPatch(status: ProblemStatus = draft.status): Partial<Problem> {
     return {
@@ -266,7 +263,6 @@ function AdminProblem({
               onChange={(event) => setDraft({ ...draft, title: event.target.value })}
             />
           </label>
-
           <label className="grid gap-1 text-sm font-semibold text-ink">
             Описание для публикации
             <textarea
@@ -276,7 +272,6 @@ function AdminProblem({
               onChange={(event) => setDraft({ ...draft, clean_description: event.target.value })}
             />
           </label>
-
           <label className="grid gap-1 text-sm font-semibold text-ink">
             Желаемый результат
             <textarea
@@ -293,7 +288,7 @@ function AdminProblem({
               <select
                 className="min-h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-brand"
                 value={CATEGORIES.includes(draft.category as never) ? draft.category : "другое"}
-                onChange={(event) => setDraft({ ...draft, category: event.target.value as Problem["category"] })}
+                onChange={(event) => setDraft({ ...draft, category: event.target.value })}
               >
                 {CATEGORIES.map((item) => (
                   <option key={item} value={item}>
@@ -302,7 +297,6 @@ function AdminProblem({
                 ))}
               </select>
             </label>
-
             <label className="grid gap-1 text-sm font-semibold text-ink">
               Статус
               <select

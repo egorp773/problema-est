@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       .select("*")
       .in("status", [...PUBLIC_STATUSES])
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(30);
 
     if (city) query = query.ilike("city", `%${city}%`);
     if (category) query = query.eq("category", category);
@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     const telegramId = body.created_by_telegram_id ? String(body.created_by_telegram_id) : null;
 
     if (!city || !address || !category || !rawDescription || !desired) {
-      return NextResponse.json({ error: "Заполните город, адрес, категорию, описание и желаемый результат." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Заполните город, адрес, категорию, описание и желаемый результат." },
+        { status: 400 }
+      );
     }
     if (!CATEGORIES.includes(category as never)) {
       return NextResponse.json({ error: "Неизвестная категория." }, { status: 400 });

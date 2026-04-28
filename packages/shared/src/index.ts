@@ -44,7 +44,7 @@ export type Problem = {
   updated_at: string;
   city: string;
   address: string;
-  category: ProblemCategory;
+  category: ProblemCategory | string;
   raw_description: string;
   title: string;
   clean_description: string;

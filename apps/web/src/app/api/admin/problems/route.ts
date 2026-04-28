@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Не удалось загрузить админ-список" },
+      { error: error instanceof Error ? error.message : "Не удалось загрузить заявки" },
       { status: 500 }
     );
   }

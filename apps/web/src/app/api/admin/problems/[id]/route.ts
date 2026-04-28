@@ -40,7 +40,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     await supabase.from("admin_actions").insert({
       problem_id: params.id,
-      action: "update_problem",
+      action: update.status ? `set_status_${update.status}` : "update_problem",
       details: update
     });
 
