@@ -46,6 +46,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     return NextResponse.json({ problem: data });
   } catch (error) {
+    console.error("PATCH admin problem error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Не удалось обновить проблему" },
       { status: 500 }

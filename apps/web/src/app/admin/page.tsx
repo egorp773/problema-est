@@ -111,7 +111,12 @@ export default function AdminPage() {
 
       const updated = data.problem as Problem;
       setMessage(`Сохранено: ${labelStatus(updated.status)}.`);
-      await load(filterRef.current, pass, true);
+      if (updated.status !== filterRef.current && filterRef.current !== "all") {
+        setProblems((current) => current.filter((p) => p.id !== updated.id));
+      } else {
+        setProblems((current) => current.map((p) => (p.id === updated.id ? updated : p)));
+      }
+      void load(filterRef.current, pass, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось сохранить изменения.");
     } finally {
@@ -255,7 +260,7 @@ function AdminProblem({
   const photos = getPhotos(problem);
   const publicUrl = `/problems/${problem.id}`;
 
-  useEffect(() => setDraft(problem), [problem]);
+  useEffect(() => setDraft(problem), [problem.id]);
 
   function draftPatch(status: ProblemStatus = draft.status): Partial<Problem> {
     return {
