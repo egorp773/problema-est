@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CATEGORIES, type Problem } from "@problema-est/shared";
+import { CATEGORIES, type ProblemWithSocial } from "@problema-est/shared";
 import { Plus, Search, SlidersHorizontal } from "lucide-react";
 import { ProblemCard } from "@/components/ProblemCard";
 
 export default function HomePage() {
-  const [problems, setProblems] = useState<Problem[]>([]);
+  const [problems, setProblems] = useState<ProblemWithSocial[]>([]);
   const [city, setCity] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function loadProblems() {
-    setLoading(true);
+  const loadProblems = useCallback(async (showLoader = false) => {
+    if (showLoader) setLoading(true);
     setError("");
     const params = new URLSearchParams();
     if (city.trim()) params.set("city", city.trim());
@@ -25,12 +25,13 @@ export default function HomePage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setProblems(data.problems);
+      window.sessionStorage.setItem("problema_est_feed_cache", JSON.stringify(data.problems));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось загрузить ленту");
     } finally {
       setLoading(false);
     }
-  }
+  }, [category, city]);
 
   function updateConfirmed(id: string, confirmationsCount: number) {
     setProblems((items) =>
@@ -41,8 +42,27 @@ export default function HomePage() {
   useEffect(() => {
     window.Telegram?.WebApp?.ready?.();
     window.Telegram?.WebApp?.expand?.();
-    void loadProblems();
+    try {
+      const cached = window.sessionStorage.getItem("problema_est_feed_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setProblems(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {
+      // Cache is optional; invalid cache should not block the feed.
+    }
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadProblems(problems.length === 0);
+    }, city.trim() ? 250 : 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [category, city, loadProblems, problems.length]);
 
   return (
     <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] px-0 pb-28">
@@ -75,7 +95,7 @@ export default function HomePage() {
             onChange={(event) => setCity(event.target.value)}
           />
           <button
-            onClick={loadProblems}
+            onClick={() => loadProblems(true)}
             className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-ink"
             aria-label="Найти"
           >
@@ -116,16 +136,40 @@ export default function HomePage() {
       </section>
 
       {error ? <p className="mx-4 mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-      {loading ? <p className="px-4 text-muted">Загрузка...</p> : null}
+      {loading && problems.length === 0 ? <FeedSkeleton /> : null}
       {!loading && problems.length === 0 ? (
         <p className="mx-4 rounded-xl border border-line bg-white p-5 text-muted">Опубликованных проблем пока нет.</p>
       ) : null}
 
-      <section className="grid gap-5 px-3">
+      <section className="grid gap-4 sm:px-3">
         {problems.map((problem) => (
           <ProblemCard key={problem.id} problem={problem} onConfirmed={updateConfirmed} />
         ))}
       </section>
     </main>
+  );
+}
+
+function FeedSkeleton() {
+  return (
+    <section className="grid gap-4 sm:px-3">
+      {[0, 1].map((item) => (
+        <article key={item} className="overflow-hidden border-y border-line bg-white sm:rounded-xl sm:border">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="h-10 w-10 rounded-full bg-slate-100" />
+            <div className="grid flex-1 gap-2">
+              <div className="h-3 w-2/3 rounded bg-slate-100" />
+              <div className="h-3 w-1/2 rounded bg-slate-100" />
+            </div>
+          </div>
+          <div className="aspect-square bg-slate-100" />
+          <div className="grid gap-2 px-4 py-4">
+            <div className="h-4 w-28 rounded bg-slate-100" />
+            <div className="h-3 w-full rounded bg-slate-100" />
+            <div className="h-3 w-2/3 rounded bg-slate-100" />
+          </div>
+        </article>
+      ))}
+    </section>
   );
 }

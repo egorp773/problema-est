@@ -34,7 +34,7 @@ export function getTelegramUser(): TelegramUser | null {
   return window.Telegram?.WebApp?.initDataUnsafe?.user ?? null;
 }
 
-export async function waitForTelegramUser(timeoutMs = 1200): Promise<TelegramUser | null> {
+export async function waitForTelegramUser(timeoutMs = 300): Promise<TelegramUser | null> {
   if (typeof window === "undefined") return null;
 
   const startedAt = Date.now();
@@ -47,7 +47,7 @@ export async function waitForTelegramUser(timeoutMs = 1200): Promise<TelegramUse
   return getTelegramUser();
 }
 
-export async function getTelegramIdentity(timeoutMs = 1200) {
+export async function getTelegramIdentity(timeoutMs = 300) {
   const user = await waitForTelegramUser(timeoutMs);
   const telegramUserId = user?.id ? String(user.id) : null;
 

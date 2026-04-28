@@ -68,6 +68,11 @@ export type ProblemComment = {
   avatar_url: string | null;
 };
 
+export type ProblemWithSocial = Problem & {
+  comments_preview?: ProblemComment[];
+  comments_count?: number;
+};
+
 export const statusLabel: Record<ProblemStatus, string> = {
   pending: "На модерации",
   published: "Опубликовано",

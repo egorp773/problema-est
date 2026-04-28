@@ -5,6 +5,93 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+type PublicComment = {
+  id: string;
+  created_at: string;
+  problem_id: string;
+  body: string;
+  display_name: string;
+  avatar_url: string | null;
+};
+
+function fallbackComment(row: {
+  id: string;
+  created_at: string;
+  problem_id: string | null;
+  details: unknown;
+}): PublicComment {
+  const details =
+    typeof row.details === "object" && row.details
+      ? row.details as { body?: unknown; display_name?: unknown; avatar_url?: unknown }
+      : {};
+
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    problem_id: row.problem_id || "",
+    body: String(details.body || ""),
+    display_name: String(details.display_name || "Пользователь"),
+    avatar_url: details.avatar_url ? String(details.avatar_url) : null
+  };
+}
+
+function commentsTableMissing(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("comments"));
+}
+
+async function loadCommentMeta(problemIds: string[]) {
+  if (problemIds.length === 0) {
+    return {
+      countByProblem: new Map<string, number>(),
+      previewByProblem: new Map<string, PublicComment[]>()
+    };
+  }
+
+  const supabase = getSupabaseAdmin();
+  const [commentsResult, fallbackResult] = await Promise.all([
+    supabase
+      .from("comments")
+      .select("id,created_at,problem_id,body,display_name,avatar_url")
+      .in("problem_id", problemIds)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase
+      .from("admin_actions")
+      .select("id,created_at,problem_id,details")
+      .in("problem_id", problemIds)
+      .eq("action", "comment")
+      .order("created_at", { ascending: false })
+      .limit(500)
+  ]);
+
+  if (commentsResult.error && !commentsTableMissing(commentsResult.error)) throw commentsResult.error;
+  if (fallbackResult.error) throw fallbackResult.error;
+
+  const comments: PublicComment[] = [
+    ...(!commentsResult.error ? (commentsResult.data ?? []) : []),
+    ...(fallbackResult.data ?? []).map(fallbackComment)
+  ].sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());
+
+  const countByProblem = new Map<string, number>();
+  const previewByProblem = new Map<string, PublicComment[]>();
+
+  for (const comment of comments) {
+    if (!comment.problem_id) continue;
+    countByProblem.set(comment.problem_id, (countByProblem.get(comment.problem_id) ?? 0) + 1);
+    const preview = previewByProblem.get(comment.problem_id) ?? [];
+    if (preview.length < 2) {
+      preview.push(comment);
+      previewByProblem.set(comment.problem_id, preview);
+    }
+  }
+
+  for (const [problemId, preview] of previewByProblem) {
+    previewByProblem.set(problemId, [...preview].reverse());
+  }
+
+  return { countByProblem, previewByProblem };
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -25,7 +112,17 @@ export async function GET(request: Request) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ problems: data ?? [] });
+    const problems = data ?? [];
+    const problemIds = problems.map((problem) => problem.id);
+    const { countByProblem, previewByProblem } = await loadCommentMeta(problemIds);
+
+    return NextResponse.json({
+      problems: problems.map((problem) => ({
+        ...problem,
+        comments_count: countByProblem.get(problem.id) ?? 0,
+        comments_preview: previewByProblem.get(problem.id) ?? []
+      }))
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Не удалось загрузить проблемы" },

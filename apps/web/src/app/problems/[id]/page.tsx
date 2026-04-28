@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Eye, Heart, MessageCircle, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Heart, MessageCircle, Send, Trash2 } from "lucide-react";
 import { type Problem, type ProblemComment } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import {
@@ -46,17 +46,12 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   async function load() {
     setLoading(true);
     try {
-      const [problemResponse, commentsResponse] = await Promise.all([
-        fetch(`/api/problems/${params.id}`, { cache: "no-store" }),
-        fetch(`/api/problems/${params.id}/comments`, { cache: "no-store" })
-      ]);
+      const problemResponse = await fetch(`/api/problems/${params.id}?include=comments`, { cache: "no-store" });
 
       const data = await problemResponse.json();
       if (!problemResponse.ok) throw new Error(data.error);
       setProblem(data.problem);
-
-      const commentsData = await commentsResponse.json();
-      if (commentsResponse.ok) setComments(commentsData.comments ?? []);
+      setComments(data.comments ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Проблема не найдена");
     } finally {
@@ -79,7 +74,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     else rememberConfirmedProblem(params.id);
 
     try {
-      const identity = await getTelegramIdentity();
+      const identity = await getTelegramIdentity(0);
       const response = await fetch(`/api/problems/${params.id}/confirm`, {
         method: wasConfirmed ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
@@ -109,7 +104,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     else rememberFollowedProblem(params.id);
 
     try {
-      const identity = await getTelegramIdentity();
+      const identity = await getTelegramIdentity(0);
       const response = await fetch(`/api/problems/${params.id}/subscribe`, {
         method: wasSubscribed ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
@@ -135,7 +130,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     setCommentBusy(true);
 
     try {
-      const identity = await getTelegramIdentity();
+      const identity = await getTelegramIdentity(0);
       const response = await fetch(`/api/problems/${params.id}/comments`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -153,7 +148,6 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       setComments((current) => [...current, data.comment]);
       if (data.comment?.id) rememberOwnComment(String(data.comment.id));
       setCommentText("");
-      setMessage("Комментарий опубликован.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось сохранить комментарий.");
     } finally {
@@ -170,7 +164,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     forgetOwnComment(commentId);
 
     try {
-      const identity = await getTelegramIdentity();
+      const identity = await getTelegramIdentity(0);
       const response = await fetch(`/api/problems/${params.id}/comments`, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
@@ -182,7 +176,6 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setMessage("Комментарий удалён.");
     } catch (err) {
       setComments(previous);
       rememberOwnComment(commentId);
@@ -245,7 +238,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
                   subscribed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
                 }`}
               >
-                <Eye className={`h-4 w-4 ${subscribed ? "fill-brand/15 text-brand" : ""}`} />
+                <Bookmark className={`h-4 w-4 ${subscribed ? "fill-brand text-brand" : ""}`} />
                 {subscribed ? "Слежу" : "Следить"}
               </button>
               <button
