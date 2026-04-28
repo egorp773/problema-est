@@ -19,6 +19,12 @@ const filters: Array<{ value: AdminFilter; label: string }> = [
   { value: "all", label: "Все" }
 ];
 
+function getPhotos(problem: Problem) {
+  const photos = Array.isArray(problem.photo_urls) ? problem.photo_urls.filter(Boolean) : [];
+  if (photos.length > 0) return photos.slice(0, 10);
+  return problem.photo_url ? [problem.photo_url] : [];
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [filter, setFilter] = useState<AdminFilter>("pending");
@@ -228,6 +234,7 @@ function AdminProblem({
 }) {
   const [draft, setDraft] = useState(problem);
   const riskFlags = useMemo(() => (Array.isArray(problem.risk_flags) ? problem.risk_flags : []), [problem.risk_flags]);
+  const photos = getPhotos(problem);
 
   useEffect(() => setDraft(problem), [problem]);
 
@@ -256,7 +263,9 @@ function AdminProblem({
         </span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+      {photos.length > 0 ? <AdminPhotos photos={photos} title={problem.title} /> : null}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <section className="grid gap-3 text-sm">
           <InfoBlock title="Сырой текст пользователя" value={problem.raw_description || "Не указан"} />
           <InfoBlock title="AI-описание сейчас" value={problem.clean_description || "Не указано"} />
@@ -358,6 +367,28 @@ function AdminProblem({
         </section>
       </div>
     </article>
+  );
+}
+
+function AdminPhotos({ photos, title }: { photos: string[]; title: string }) {
+  return (
+    <section className="rounded-xl border border-line bg-slate-50 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-ink">Фото</p>
+        <p className="text-xs text-muted">{photos.length} шт.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+        {photos.map((photo, index) => (
+          <a key={`${photo}-${index}`} href={photo} target="_blank" rel="noreferrer" className="relative overflow-hidden rounded-lg border border-line bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo} alt={`${title} ${index + 1}`} className="aspect-square w-full object-cover" loading="lazy" />
+            <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold text-white">
+              {index + 1}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }
 

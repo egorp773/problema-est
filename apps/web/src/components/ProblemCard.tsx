@@ -89,10 +89,10 @@ export function ProblemCard({
         </div>
       </header>
 
-      <Link href={`/problems/${problem.id}`} className="block bg-slate-100">
-        {hasPhotos ? (
-          <PhotoGrid photos={photos} title={problem.title} />
-        ) : (
+      {hasPhotos ? (
+        <PhotoCarousel photos={photos} title={problem.title} problemId={problem.id} />
+      ) : (
+        <Link href={`/problems/${problem.id}`} className="block bg-slate-100">
           <div className="flex aspect-square w-full flex-col justify-between bg-gradient-to-br from-teal-50 via-white to-slate-100 p-5">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand">
               <span>{problem.category}</span>
@@ -101,8 +101,8 @@ export function ProblemCard({
             <h3 className="text-3xl font-bold leading-tight text-ink">{problem.title}</h3>
             <p className="line-clamp-3 text-sm leading-6 text-slate-700">{problem.clean_description}</p>
           </div>
-        )}
-      </Link>
+        </Link>
+      )}
 
       <section className="px-4 py-3">
         {hasPhotos ? (
@@ -154,45 +154,29 @@ export function ProblemCard({
   );
 }
 
-function PhotoGrid({ photos, title }: { photos: string[]; title: string }) {
-  if (photos.length === 1) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={photos[0]} alt={title} className="aspect-square w-full object-cover" loading="lazy" />
-    );
-  }
-
-  if (photos.length === 2) {
-    return (
-      <div className="grid aspect-square grid-cols-2 gap-0.5 bg-white">
-        {photos.slice(0, 2).map((photo, index) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={photo} src={photo} alt={`${title} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+function PhotoCarousel({ photos, title, problemId }: { photos: string[]; title: string; problemId: string }) {
+  return (
+    <section className="relative bg-slate-100">
+      <div className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth">
+        {photos.map((photo, index) => (
+          <Link key={`${photo}-${index}`} href={`/problems/${problemId}`} className="relative block min-w-full snap-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo} alt={`${title} ${index + 1}`} className="aspect-square w-full object-cover" loading="lazy" />
+            {photos.length > 1 ? (
+              <span className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-sm font-semibold text-white">
+                {index + 1}/{photos.length}
+              </span>
+            ) : null}
+          </Link>
         ))}
       </div>
-    );
-  }
-
-  return (
-    <div className="grid aspect-square grid-cols-2 gap-0.5 bg-white">
-      <div className="row-span-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photos[0]} alt={`${title} 1`} className="h-full w-full object-cover" loading="lazy" />
-      </div>
-      {photos.slice(1, 3).map((photo, index) => {
-        const extra = index === 1 ? photos.length - 3 : 0;
-        return (
-          <div key={photo} className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo} alt={`${title} ${index + 2}`} className="h-full w-full object-cover" loading="lazy" />
-            {extra > 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-3xl font-bold text-white">
-                +{extra}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
+      {photos.length > 1 ? (
+        <div className="pointer-events-none absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+          {photos.map((photo, index) => (
+            <span key={`${photo}-dot-${index}`} className="h-1.5 w-1.5 rounded-full bg-white/80 shadow" />
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
