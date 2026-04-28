@@ -1,9 +1,10 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ImagePlus, Send, X } from "lucide-react";
 import { CATEGORIES, type ProblemCategory } from "@problema-est/shared";
+import { getLocalCitySuggestions, mergeSuggestions } from "@/lib/geo";
 import { ensureAnonymousKey, getTelegramUserId } from "@/lib/telegram";
 
 type ProblemForm = {
@@ -30,9 +31,74 @@ export default function NewProblemPage() {
     desired_result: ""
   });
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
+  const [citySuggestionsFromApi, setCitySuggestionsFromApi] = useState<string[]>([]);
+  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const citySuggestions = useMemo(
+    () => mergeSuggestions(getLocalCitySuggestions(form.city, 8), citySuggestionsFromApi).slice(0, 8),
+    [citySuggestionsFromApi, form.city]
+  );
+
+  useEffect(() => {
+    const query = form.city.trim();
+    if (!query) {
+      setCitySuggestionsFromApi([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/suggestions?type=city&q=${encodeURIComponent(query)}`, {
+          signal: controller.signal
+        });
+        const data = await response.json();
+        if (response.ok) setCitySuggestionsFromApi(data.suggestions ?? []);
+      } catch (err) {
+        if (!controller.signal.aborted) setCitySuggestionsFromApi([]);
+      }
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [form.city]);
+
+  useEffect(() => {
+    const city = form.city.trim();
+    const query = form.address.trim();
+    if (!city || query.length < 2) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          type: "address",
+          city,
+          q: query
+        });
+        const response = await fetch(`/api/suggestions?${params.toString()}`, {
+          signal: controller.signal
+        });
+        const data = await response.json();
+        if (response.ok) setAddressSuggestions(data.suggestions ?? []);
+      } catch (err) {
+        if (!controller.signal.aborted) setAddressSuggestions([]);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [form.address, form.city]);
 
   function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).slice(0, Math.max(10 - photos.length, 0));
@@ -120,14 +186,23 @@ export default function NewProblemPage() {
       <p className="mt-2 text-muted">Опишите ситуацию простыми словами. Перед публикацией текст проверит ИИ и админ.</p>
 
       <form onSubmit={submit} className="mt-6 grid gap-4 rounded-xl border border-line bg-white p-4 shadow-soft">
-        <label className="grid gap-2 text-sm font-semibold text-ink">
-          Город
-          <input required className="min-h-12 rounded-lg border border-line px-3 font-normal outline-none focus:border-brand" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
-        </label>
-        <label className="grid gap-2 text-sm font-semibold text-ink">
-          Район или адрес
-          <input required className="min-h-12 rounded-lg border border-line px-3 font-normal outline-none focus:border-brand" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
-        </label>
+        <SuggestInput
+          label="Город"
+          value={form.city}
+          placeholder="Начните вводить: Москва, Мурманск..."
+          suggestions={citySuggestions}
+          onChange={(value) => setForm({ ...form, city: value })}
+          onSelect={(value) => setForm({ ...form, city: value })}
+        />
+        <SuggestInput
+          label="Район или адрес"
+          value={form.address}
+          placeholder="Улица, дом или район"
+          suggestions={addressSuggestions}
+          onChange={(value) => setForm({ ...form, address: value })}
+          onSelect={(value) => setForm({ ...form, address: value })}
+          helper={form.city.trim() ? "Подсказки берутся из уже опубликованных проблем в этом городе." : "Сначала выберите город."}
+        />
         <label className="grid gap-2 text-sm font-semibold text-ink">
           Категория
           <select required className="min-h-12 rounded-lg border border-line px-3 font-normal outline-none focus:border-brand" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ProblemCategory })}>
@@ -207,5 +282,64 @@ export default function NewProblemPage() {
         </button>
       </form>
     </main>
+  );
+}
+
+function SuggestInput({
+  label,
+  value,
+  placeholder,
+  suggestions,
+  helper,
+  onChange,
+  onSelect
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  suggestions: string[];
+  helper?: string;
+  onChange: (value: string) => void;
+  onSelect: (value: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const visibleSuggestions = focused && value.trim().length > 0 ? suggestions : [];
+
+  return (
+    <div className="relative grid gap-2 text-sm font-semibold text-ink">
+      <label className="grid gap-2">
+        {label}
+        <input
+          required
+          className="min-h-12 rounded-lg border border-line px-3 font-normal outline-none focus:border-brand"
+          placeholder={placeholder}
+          value={value}
+          onFocus={() => setFocused(true)}
+          onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+
+      {visibleSuggestions.length > 0 ? (
+        <div className="absolute left-0 right-0 top-[74px] z-20 overflow-hidden rounded-xl border border-line bg-white shadow-soft">
+          {visibleSuggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(suggestion);
+                setFocused(false);
+              }}
+              className="block min-h-11 w-full border-b border-line px-3 text-left text-sm font-normal text-ink last:border-b-0 active:bg-teal-50"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {helper ? <p className="text-xs font-normal text-muted">{helper}</p> : null}
+    </div>
   );
 }
