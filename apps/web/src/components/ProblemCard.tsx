@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Trash2 } from "lucide-react";
+import { Eye, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Trash2 } from "lucide-react";
 import { type ProblemComment, type ProblemWithSocial } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import {
@@ -42,6 +42,7 @@ export function ProblemCard({
   const [count, setCount] = useState(problem.confirmations_count);
   const [comments, setComments] = useState<ProblemComment[]>(problem.comments_preview ?? []);
   const [commentsCount, setCommentsCount] = useState(problem.comments_count ?? problem.comments_preview?.length ?? 0);
+  const [followsCount, setFollowsCount] = useState(problem.follows_count ?? 0);
   const [commentText, setCommentText] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -54,11 +55,15 @@ export function ProblemCard({
 
   useEffect(() => {
     setCount(problem.confirmations_count);
+  }, [problem.confirmations_count]);
+
+  useEffect(() => {
     setComments(problem.comments_preview ?? []);
     setCommentsCount(problem.comments_count ?? problem.comments_preview?.length ?? 0);
+    setFollowsCount(problem.follows_count ?? 0);
     setConfirmed(isConfirmedLocally(problem.id));
     setFollowed(isFollowedLocally(problem.id));
-  }, [problem]);
+  }, [problem.id, problem.comments_count, problem.comments_preview, problem.follows_count]);
 
   const shareText = useMemo(() => {
     return `Проблема есть: ${problem.title}
@@ -106,7 +111,9 @@ export function ProblemCard({
   async function toggleFollow() {
     setError("");
     const wasFollowed = followed;
+    const previousCount = followsCount;
     setFollowed(!wasFollowed);
+    setFollowsCount(wasFollowed ? Math.max(followsCount - 1, 0) : followsCount + 1);
     if (wasFollowed) forgetFollowedProblem(problem.id);
     else rememberFollowedProblem(problem.id);
 
@@ -124,6 +131,7 @@ export function ProblemCard({
       if (!response.ok) throw new Error(data.error);
     } catch (err) {
       setFollowed(wasFollowed);
+      setFollowsCount(previousCount);
       if (wasFollowed) rememberFollowedProblem(problem.id);
       else forgetFollowedProblem(problem.id);
       setError(err instanceof Error ? err.message : "Не удалось обновить слежение.");
@@ -250,12 +258,14 @@ export function ProblemCard({
 
       <section className="px-4 pb-4 pt-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={toggleLike} className="inline-flex h-10 w-10 items-center justify-center -ml-2 text-ink" aria-label="Лайк">
+          <div className="flex min-w-0 items-center gap-3">
+            <button onClick={toggleLike} className="inline-flex h-10 items-center gap-1.5 -ml-2 px-1 text-sm font-semibold text-ink" aria-label="Лайк">
               <Heart className={`h-7 w-7 transition ${confirmed ? "fill-red-500 text-red-500" : ""}`} />
+              <span>{count}</span>
             </button>
-            <button onClick={openCommentInput} className="inline-flex h-10 w-10 items-center justify-center text-ink" aria-label="Комментарии">
+            <button onClick={openCommentInput} className="inline-flex h-10 items-center gap-1.5 px-1 text-sm font-semibold text-ink" aria-label="Комментарии">
               <MessageCircle className="h-7 w-7" />
+              <span>{commentsCount}</span>
             </button>
             <a
               href={getTelegramShareUrl(shareText)}
@@ -267,12 +277,19 @@ export function ProblemCard({
               <Send className="h-7 w-7" />
             </a>
           </div>
-          <button onClick={toggleFollow} className="inline-flex h-10 w-10 items-center justify-center -mr-2 text-ink" aria-label="Следить">
-            <Bookmark className={`h-7 w-7 transition ${followed ? "fill-brand text-brand" : ""}`} />
+          <button
+            onClick={toggleFollow}
+            className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${
+              followed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
+            }`}
+            aria-label="Следить"
+          >
+            <Eye className={`h-4 w-4 ${followed ? "fill-brand/15 text-brand" : ""}`} />
+            <span>{followsCount}</span>
+            <span>{followed ? "Слежу" : "Следить"}</span>
           </button>
         </div>
 
-        <p className="mt-1 text-sm font-semibold text-ink">{count} лайков</p>
         <div className="mt-1 text-sm leading-6 text-slate-800">
           <span className="font-semibold text-ink">{problem.title}</span>{" "}
           <span className={descriptionOpen ? "" : "line-clamp-2"}>

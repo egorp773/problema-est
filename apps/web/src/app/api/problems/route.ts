@@ -39,6 +39,10 @@ function commentsTableMissing(error: { message?: string } | null) {
   return Boolean(error?.message?.includes("comments"));
 }
 
+function subscriptionsTableMissing(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("subscriptions"));
+}
+
 async function loadCommentMeta(problemIds: string[]) {
   if (problemIds.length === 0) {
     return {
@@ -92,6 +96,41 @@ async function loadCommentMeta(problemIds: string[]) {
   return { countByProblem, previewByProblem };
 }
 
+async function loadFollowCounts(problemIds: string[]) {
+  const countByProblem = new Map<string, number>();
+  if (problemIds.length === 0) return countByProblem;
+
+  const supabase = getSupabaseAdmin();
+  const [subscriptionsResult, fallbackResult] = await Promise.all([
+    supabase
+      .from("subscriptions")
+      .select("problem_id")
+      .in("problem_id", problemIds)
+      .limit(1000),
+    supabase
+      .from("admin_actions")
+      .select("problem_id")
+      .in("problem_id", problemIds)
+      .eq("action", "subscription")
+      .limit(1000)
+  ]);
+
+  if (subscriptionsResult.error && !subscriptionsTableMissing(subscriptionsResult.error)) throw subscriptionsResult.error;
+  if (fallbackResult.error) throw fallbackResult.error;
+
+  const rows = [
+    ...(!subscriptionsResult.error ? (subscriptionsResult.data ?? []) : []),
+    ...(fallbackResult.data ?? [])
+  ];
+
+  for (const row of rows) {
+    if (!row.problem_id) continue;
+    countByProblem.set(row.problem_id, (countByProblem.get(row.problem_id) ?? 0) + 1);
+  }
+
+  return countByProblem;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -114,13 +153,17 @@ export async function GET(request: Request) {
 
     const problems = data ?? [];
     const problemIds = problems.map((problem) => problem.id);
-    const { countByProblem, previewByProblem } = await loadCommentMeta(problemIds);
+    const [{ countByProblem, previewByProblem }, followsByProblem] = await Promise.all([
+      loadCommentMeta(problemIds),
+      loadFollowCounts(problemIds)
+    ]);
 
     return NextResponse.json({
       problems: problems.map((problem) => ({
         ...problem,
         comments_count: countByProblem.get(problem.id) ?? 0,
-        comments_preview: previewByProblem.get(problem.id) ?? []
+        comments_preview: previewByProblem.get(problem.id) ?? [],
+        follows_count: followsByProblem.get(problem.id) ?? 0
       }))
     });
   } catch (error) {

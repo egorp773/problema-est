@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bookmark, Heart, MessageCircle, Send, Trash2 } from "lucide-react";
-import { type Problem, type ProblemComment } from "@problema-est/shared";
+import { ArrowLeft, Eye, Heart, MessageCircle, Send, Trash2 } from "lucide-react";
+import { type ProblemComment, type ProblemWithSocial } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import {
   forgetConfirmedProblem,
@@ -18,14 +18,14 @@ import {
 } from "@/lib/local-actions";
 import { getTelegramDisplayName, getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
-function getPhotos(problem: Problem) {
+function getPhotos(problem: ProblemWithSocial) {
   const photos = Array.isArray(problem.photo_urls) ? problem.photo_urls.filter(Boolean) : [];
   if (photos.length > 0) return photos.slice(0, 10);
   return problem.photo_url ? [problem.photo_url] : [];
 }
 
 export default function ProblemPage({ params }: { params: { id: string } }) {
-  const [problem, setProblem] = useState<Problem | null>(null);
+  const [problem, setProblem] = useState<ProblemWithSocial | null>(null);
   const [comments, setComments] = useState<ProblemComment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -99,7 +99,13 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     setMessage("");
     setError("");
     const wasSubscribed = subscribed;
+    const previousCount = problem?.follows_count ?? 0;
     setSubscribed(!wasSubscribed);
+    setProblem((current) =>
+      current
+        ? { ...current, follows_count: wasSubscribed ? Math.max((current.follows_count ?? 0) - 1, 0) : (current.follows_count ?? 0) + 1 }
+        : current
+    );
     if (wasSubscribed) forgetFollowedProblem(params.id);
     else rememberFollowedProblem(params.id);
 
@@ -117,6 +123,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       if (!response.ok) throw new Error(data.error);
     } catch (err) {
       setSubscribed(wasSubscribed);
+      setProblem((current) => current ? { ...current, follows_count: previousCount } : current);
       if (wasSubscribed) rememberFollowedProblem(params.id);
       else forgetFollowedProblem(params.id);
       setError(err instanceof Error ? err.message : "Не удалось добавить проблему в отслеживаемые.");
@@ -233,41 +240,45 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <button
-                onClick={subscribe}
-                className={`inline-flex h-9 items-center gap-1 rounded-full px-3 text-[11px] font-semibold ${
-                  subscribed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
-                }`}
-              >
-                <Bookmark className={`h-4 w-4 ${subscribed ? "fill-brand text-brand" : ""}`} />
-                {subscribed ? "Слежу" : "Следить"}
-              </button>
-              <button
                 onClick={confirm}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-ink"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-slate-50 px-3 text-sm font-semibold text-ink"
                 aria-label="Поддержать"
               >
-                <Heart className={`h-4 w-4 ${confirmed ? "fill-brand text-brand" : ""}`} />
+                <Heart className={`h-5 w-5 ${confirmed ? "fill-red-500 text-red-500" : ""}`} />
+                <span>{problem.confirmations_count}</span>
               </button>
               <button
                 onClick={() => commentInputRef.current?.focus()}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-ink"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-slate-50 px-3 text-sm font-semibold text-ink"
                 aria-label="Комментарии"
               >
-                <MessageCircle className="h-4 w-4" />
+                <MessageCircle className="h-5 w-5" />
+                <span>{comments.length}</span>
               </button>
             </div>
-            <a
-              href={getTelegramShareUrl(shareText)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-3 text-[11px] font-semibold text-ink"
-            >
-              <Send className="h-3.5 w-3.5" />
-              Поделиться
-            </a>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                onClick={subscribe}
+                className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold ${
+                  subscribed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
+                }`}
+              >
+                <Eye className={`h-4 w-4 ${subscribed ? "fill-brand/15 text-brand" : ""}`} />
+                <span>{problem.follows_count ?? 0}</span>
+                {subscribed ? "Слежу" : "Следить"}
+              </button>
+              <a
+                href={getTelegramShareUrl(shareText)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-ink"
+                aria-label="Поделиться"
+              >
+                <Send className="h-4 w-4" />
+              </a>
+            </div>
           </div>
 
-          <p className="mt-4 text-sm font-semibold text-ink">{problem.confirmations_count} лайков</p>
           <p className="mt-2 text-base leading-7 text-slate-800">{problem.clean_description}</p>
 
           <div className="mt-4 rounded-xl bg-slate-50 p-4">

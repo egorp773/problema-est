@@ -71,6 +71,7 @@ export type ProblemComment = {
 export type ProblemWithSocial = Problem & {
   comments_preview?: ProblemComment[];
   comments_count?: number;
+  follows_count?: number;
 };
 
 export const statusLabel: Record<ProblemStatus, string> = {

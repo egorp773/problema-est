@@ -8,6 +8,10 @@ function commentsTableMissing(error: { message?: string } | null) {
   return Boolean(error?.message?.includes("comments"));
 }
 
+function subscriptionsTableMissing(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("subscriptions"));
+}
+
 function fallbackComment(row: {
   id: string;
   created_at: string;
@@ -56,6 +60,28 @@ async function loadComments(problemId: string) {
   ].sort((first, second) => new Date(first.created_at).getTime() - new Date(second.created_at).getTime());
 }
 
+async function loadFollowCount(problemId: string) {
+  const supabase = getSupabaseAdmin();
+  const [subscriptionsResult, fallbackResult] = await Promise.all([
+    supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("problem_id", problemId)
+      .limit(1000),
+    supabase
+      .from("admin_actions")
+      .select("id")
+      .eq("problem_id", problemId)
+      .eq("action", "subscription")
+      .limit(1000)
+  ]);
+
+  if (subscriptionsResult.error && !subscriptionsTableMissing(subscriptionsResult.error)) throw subscriptionsResult.error;
+  if (fallbackResult.error) throw fallbackResult.error;
+
+  return (!subscriptionsResult.error ? (subscriptionsResult.data?.length ?? 0) : 0) + (fallbackResult.data?.length ?? 0);
+}
+
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const { searchParams } = new URL(request.url);
@@ -76,12 +102,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ problem: data });
     }
 
-    const comments = await loadComments(params.id);
+    const [comments, followsCount] = await Promise.all([
+      loadComments(params.id),
+      loadFollowCount(params.id)
+    ]);
     return NextResponse.json({
       problem: {
         ...data,
         comments_count: comments.length,
-        comments_preview: comments.slice(-2)
+        comments_preview: comments.slice(-2),
+        follows_count: followsCount
       },
       comments
     });
