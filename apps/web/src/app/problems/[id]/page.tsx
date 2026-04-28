@@ -7,6 +7,12 @@ import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import { ensureAnonymousKey, getTelegramShareUrl, getTelegramUserId } from "@/lib/telegram";
 
+function getPhotos(problem: Problem) {
+  const photos = Array.isArray(problem.photo_urls) ? problem.photo_urls.filter(Boolean) : [];
+  if (photos.length > 0) return photos.slice(0, 10);
+  return problem.photo_url ? [problem.photo_url] : [];
+}
+
 export default function ProblemPage({ params }: { params: { id: string } }) {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +78,8 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     );
   }
 
+  const photos = getPhotos(problem);
+
   return (
     <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] pb-8">
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-white/95 px-4 py-3 backdrop-blur">
@@ -85,11 +93,8 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       </header>
 
       <article className="bg-white">
-        {problem.photo_url ? (
-          <a href={problem.photo_url} target="_blank" rel="noreferrer" className="block bg-slate-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={problem.photo_url} alt="" className="aspect-square w-full object-cover" />
-          </a>
+        {photos.length > 0 ? (
+          <ProblemGallery photos={photos} title={problem.title} />
         ) : (
           <div className="flex aspect-square w-full flex-col justify-between bg-gradient-to-br from-teal-50 via-white to-slate-100 p-5">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand">
@@ -142,5 +147,23 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
         </section>
       </article>
     </main>
+  );
+}
+
+function ProblemGallery({ photos, title }: { photos: string[]; title: string }) {
+  return (
+    <section className="bg-slate-100">
+      <div className="flex snap-x snap-mandatory overflow-x-auto">
+        {photos.map((photo, index) => (
+          <a key={photo} href={photo} target="_blank" rel="noreferrer" className="relative block min-w-full snap-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo} alt={`${title} ${index + 1}`} className="aspect-square w-full object-cover" />
+            <span className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-sm font-semibold text-white">
+              {index + 1}/{photos.length}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }

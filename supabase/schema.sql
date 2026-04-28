@@ -12,6 +12,7 @@ create table if not exists problems (
   clean_description text not null,
   desired_result text not null,
   photo_url text,
+  photo_urls jsonb not null default '[]'::jsonb,
   status text not null default 'pending',
   risk_flags jsonb not null default '[]'::jsonb,
   moderation_reason text,

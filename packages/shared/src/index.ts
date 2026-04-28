@@ -50,6 +50,7 @@ export type Problem = {
   clean_description: string;
   desired_result: string;
   photo_url: string | null;
+  photo_urls?: string[] | null;
   status: ProblemStatus;
   risk_flags: string[];
   moderation_reason: string | null;

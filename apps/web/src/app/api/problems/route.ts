@@ -41,7 +41,12 @@ export async function POST(request: Request) {
     const address = String(body.address || "").trim();
     const category = String(body.category || "").trim();
     const rawDescription = String(body.raw_description || "").trim();
-    const photoUrl = String(body.photo_url || "").trim() || null;
+    const photoUrls = Array.isArray(body.photo_urls)
+      ? body.photo_urls.map((item: unknown) => String(item).trim()).filter(Boolean).slice(0, 10)
+      : [];
+    const legacyPhotoUrl = String(body.photo_url || "").trim();
+    const allPhotoUrls = [...photoUrls, ...(legacyPhotoUrl ? [legacyPhotoUrl] : [])].slice(0, 10);
+    const photoUrl = allPhotoUrls[0] || null;
     const desired = String(body.desired_result || "").trim();
     const telegramId = body.created_by_telegram_id ? String(body.created_by_telegram_id) : null;
 
@@ -64,26 +69,45 @@ export async function POST(request: Request) {
     });
 
     const supabase = getSupabaseAdmin();
+    const payload = {
+      city,
+      address,
+      category: ai.category,
+      raw_description: rawDescription,
+      title: ai.title,
+      clean_description: ai.clean_description,
+      desired_result: ai.desired_result,
+      photo_url: photoUrl,
+      photo_urls: allPhotoUrls,
+      status: "pending",
+      risk_flags: ai.risk_flags,
+      moderation_reason: ai.moderation_reason,
+      created_by_telegram_id: telegramId
+    };
+
     const { data, error } = await supabase
       .from("problems")
-      .insert({
-        city,
-        address,
-        category: ai.category,
-        raw_description: rawDescription,
-        title: ai.title,
-        clean_description: ai.clean_description,
-        desired_result: ai.desired_result,
-        photo_url: photoUrl,
-        status: "pending",
-        risk_flags: ai.risk_flags,
-        moderation_reason: ai.moderation_reason,
-        created_by_telegram_id: telegramId
-      })
+      .insert(payload)
       .select("id,status")
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes("photo_urls")) {
+        const { photo_urls: _photoUrls, ...legacyPayload } = payload;
+        const { data: legacyData, error: legacyError } = await supabase
+          .from("problems")
+          .insert(legacyPayload)
+          .select("id,status")
+          .single();
+        if (legacyError) throw legacyError;
+        return NextResponse.json({
+          problem: legacyData,
+          ai,
+          warning: "Колонка photo_urls ещё не добавлена в Supabase. Сохранено только первое фото."
+        });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ problem: data, ai });
   } catch (error) {

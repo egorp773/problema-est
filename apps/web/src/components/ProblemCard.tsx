@@ -7,6 +7,12 @@ import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import { ensureAnonymousKey, getTelegramShareUrl, getTelegramUserId } from "@/lib/telegram";
 
+function getPhotos(problem: Problem) {
+  const photos = Array.isArray(problem.photo_urls) ? problem.photo_urls.filter(Boolean) : [];
+  if (photos.length > 0) return photos.slice(0, 10);
+  return problem.photo_url ? [problem.photo_url] : [];
+}
+
 export function ProblemCard({
   problem,
   onConfirmed
@@ -17,6 +23,8 @@ export function ProblemCard({
   const [count, setCount] = useState(problem.confirmations_count);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const photos = getPhotos(problem);
+  const hasPhotos = photos.length > 0;
 
   useEffect(() => {
     setCount(problem.confirmations_count);
@@ -82,9 +90,8 @@ export function ProblemCard({
       </header>
 
       <Link href={`/problems/${problem.id}`} className="block bg-slate-100">
-        {problem.photo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={problem.photo_url} alt="" className="aspect-square w-full object-cover" />
+        {hasPhotos ? (
+          <PhotoGrid photos={photos} title={problem.title} />
         ) : (
           <div className="flex aspect-square w-full flex-col justify-between bg-gradient-to-br from-teal-50 via-white to-slate-100 p-5">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand">
@@ -98,7 +105,7 @@ export function ProblemCard({
       </Link>
 
       <section className="px-4 py-3">
-        {problem.photo_url ? (
+        {hasPhotos ? (
           <div className="mb-3 border-b border-line pb-3">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand">
               <span>{problem.category}</span>
@@ -136,7 +143,7 @@ export function ProblemCard({
         </div>
 
         <p className="mt-3 text-sm font-semibold text-ink">{count} подтверждений</p>
-        {!problem.photo_url ? (
+        {!hasPhotos ? (
           <Link href={`/problems/${problem.id}`} className="mt-2 inline-block text-sm text-muted">
             Открыть детали и обсуждение
           </Link>
@@ -144,5 +151,48 @@ export function ProblemCard({
         {notice ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-muted">{notice}</p> : null}
       </section>
     </article>
+  );
+}
+
+function PhotoGrid({ photos, title }: { photos: string[]; title: string }) {
+  if (photos.length === 1) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={photos[0]} alt={title} className="aspect-square w-full object-cover" loading="lazy" />
+    );
+  }
+
+  if (photos.length === 2) {
+    return (
+      <div className="grid aspect-square grid-cols-2 gap-0.5 bg-white">
+        {photos.slice(0, 2).map((photo, index) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={photo} src={photo} alt={`${title} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid aspect-square grid-cols-2 gap-0.5 bg-white">
+      <div className="row-span-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photos[0]} alt={`${title} 1`} className="h-full w-full object-cover" loading="lazy" />
+      </div>
+      {photos.slice(1, 3).map((photo, index) => {
+        const extra = index === 1 ? photos.length - 3 : 0;
+        return (
+          <div key={photo} className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo} alt={`${title} ${index + 2}`} className="h-full w-full object-cover" loading="lazy" />
+            {extra > 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-3xl font-bold text-white">
+                +{extra}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
