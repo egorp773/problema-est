@@ -1,0 +1,21 @@
+{
+  "name": "problema-est",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @problema-est/web",
+    "dev:bot": "npm run dev -w @problema-est/bot",
+    "build": "npm run build -w @problema-est/shared && npm run build -w @problema-est/web && npm run build -w @problema-est/bot",
+    "lint": "npm run lint -w @problema-est/web",
+    "test:ai": "tsx apps/web/src/lib/ai.test.ts",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "tsx": "^4.15.7",
+    "typescript": "^5.4.5"
+  }
+}
