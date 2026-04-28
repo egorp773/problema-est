@@ -54,7 +54,7 @@ export async function getTelegramIdentity(timeoutMs = 1200) {
   return {
     user,
     telegramUserId,
-    anonymousKey: telegramUserId ? null : ensureAnonymousKey()
+    anonymousKey: ensureAnonymousKey()
   };
 }
 

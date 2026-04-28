@@ -56,6 +56,10 @@ function isMissingOptionalStorage(error: unknown) {
   return message.includes("created_by_anonymous_key") || message.includes("subscriptions");
 }
 
+function fallbackProblemId(row: { problem_id?: string | null }) {
+  return row.problem_id || "";
+}
+
 function uniqueById<T extends { id: string }>(items: T[]) {
   const map = new Map<string, T>();
   for (const item of items) map.set(item.id, item);
@@ -149,6 +153,31 @@ async function loadProblemIdsFromTable(table: "confirmations" | "subscriptions",
     }
 
     ids.push(...(result.value.data ?? []).map((item) => item.problem_id).filter(Boolean));
+  }
+
+  const uniqueIds = Array.from(new Set(ids));
+
+  if (table === "subscriptions" && uniqueIds.length === 0) {
+    const fallbackFilters = [];
+    if (anonymousKey) fallbackFilters.push({ anonymous_key: anonymousKey });
+    if (telegramUserId) fallbackFilters.push({ telegram_user_id: telegramUserId });
+
+    const fallbackResults = await Promise.allSettled(
+      fallbackFilters.map((filter) =>
+        supabase
+          .from("admin_actions")
+          .select("problem_id")
+          .eq("action", "subscription")
+          .contains("details", filter)
+          .limit(100)
+      )
+    );
+
+    for (const result of fallbackResults) {
+      if (result.status === "rejected") continue;
+      if (result.value.error) continue;
+      ids.push(...(result.value.data ?? []).map(fallbackProblemId).filter(Boolean));
+    }
   }
 
   return Array.from(new Set(ids));

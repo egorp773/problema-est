@@ -4,6 +4,10 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+function isSubscriptionsMissing(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("subscriptions"));
+}
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const body = await request.json();
@@ -29,7 +33,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const { error } = await supabase.from("subscriptions").insert({
       problem_id: params.id,
       telegram_user_id: telegramUserId,
-      anonymous_key: telegramUserId ? null : anonymousKey
+      anonymous_key: anonymousKey
     });
 
     if (error) {
@@ -37,6 +41,43 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({
           alreadySubscribed: true,
           message: "Вы уже отслеживаете эту проблему."
+        });
+      }
+
+      if (isSubscriptionsMissing(error)) {
+        const identityFilter = anonymousKey
+          ? { anonymous_key: anonymousKey }
+          : { telegram_user_id: telegramUserId };
+        const { data: existing, error: existingError } = await supabase
+          .from("admin_actions")
+          .select("id")
+          .eq("problem_id", params.id)
+          .eq("action", "subscription")
+          .contains("details", identityFilter)
+          .limit(1);
+
+        if (existingError) throw existingError;
+        if (existing && existing.length > 0) {
+          return NextResponse.json({
+            alreadySubscribed: true,
+            message: "Вы уже отслеживаете эту проблему."
+          });
+        }
+
+        const fallback = await supabase.from("admin_actions").insert({
+          problem_id: params.id,
+          action: "subscription",
+          details: {
+            telegram_user_id: telegramUserId,
+            anonymous_key: anonymousKey
+          }
+        });
+
+        if (fallback.error) throw fallback.error;
+
+        return NextResponse.json({
+          alreadySubscribed: false,
+          message: "Проблема добавлена в отслеживаемые."
         });
       }
       throw error;

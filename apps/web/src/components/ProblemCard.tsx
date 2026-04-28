@@ -22,12 +22,14 @@ export function ProblemCard({
 }) {
   const [count, setCount] = useState(problem.confirmations_count);
   const [busy, setBusy] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [notice, setNotice] = useState("");
   const photos = getPhotos(problem);
   const hasPhotos = photos.length > 0;
 
   useEffect(() => {
     setCount(problem.confirmations_count);
+    setConfirmed(localStorage.getItem(`problem_confirmed_${problem.id}`) === "1");
   }, [problem.confirmations_count]);
 
   const shareText = useMemo(() => {
@@ -61,6 +63,8 @@ export function ProblemCard({
 
       setCount(data.confirmations_count);
       onConfirmed?.(problem.id, data.confirmations_count);
+      setConfirmed(true);
+      localStorage.setItem(`problem_confirmed_${problem.id}`, "1");
       setNotice(data.alreadyConfirmed ? "Вы уже подтверждали эту проблему." : "Вы подтвердили проблему.");
     } catch (error) {
       setCount(previousCount);
@@ -116,26 +120,28 @@ export function ProblemCard({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={confirmProblem}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink disabled:opacity-50"
+              className={`inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold disabled:opacity-50 ${
+                confirmed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
+              }`}
             >
-              <CheckCircle2 className={`h-6 w-6 ${count > problem.confirmations_count ? "text-brand" : ""}`} />
-              Подтвердить
+              <CheckCircle2 className={`h-5 w-5 ${confirmed || count > problem.confirmations_count ? "fill-brand/15 text-brand" : ""}`} />
+              {confirmed ? "Подтверждено" : "Меня касается"}
             </button>
-            <Link href={`/problems/${problem.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
-              <MessageCircle className="h-6 w-6" />
-              Коммент.
+            <Link href={`/problems/${problem.id}`} className="inline-flex h-9 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[11px] font-semibold text-ink">
+              <MessageCircle className="h-5 w-5" />
+              Комм.
             </Link>
           </div>
           <a
             href={getTelegramShareUrl(shareText)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-ink"
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[11px] font-semibold text-ink"
           >
             <Send className="h-4 w-4" />
             Поделиться

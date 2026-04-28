@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const { error } = await supabase.from("confirmations").insert({
       problem_id: params.id,
       telegram_user_id: telegramUserId,
-      anonymous_key: telegramUserId ? null : anonymousKey
+      anonymous_key: anonymousKey
     });
 
     if (error) {

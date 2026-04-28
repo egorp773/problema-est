@@ -84,7 +84,7 @@ export async function POST(request: Request) {
       risk_flags: ai.risk_flags,
       moderation_reason: ai.moderation_reason,
       created_by_telegram_id: telegramId,
-      created_by_anonymous_key: telegramId ? null : anonymousKey
+      created_by_anonymous_key: anonymousKey
     };
 
     let insertPayload = payload;
