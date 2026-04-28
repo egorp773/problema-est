@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, MessageCircle, Send, MapPin, MoreHorizontal } from "lucide-react";
+import { CheckCircle2, MapPin, MessageCircle, MoreHorizontal, Send } from "lucide-react";
 import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import { ensureAnonymousKey, getTelegramShareUrl, getTelegramUserId } from "@/lib/telegram";
@@ -18,6 +18,10 @@ export function ProblemCard({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
+  useEffect(() => {
+    setCount(problem.confirmations_count);
+  }, [problem.confirmations_count]);
+
   const shareText = useMemo(() => {
     return `Проблема есть: ${problem.title}
 Эту проблему уже подтвердили ${count} человек.
@@ -28,6 +32,7 @@ export function ProblemCard({
     if (busy) return;
     setBusy(true);
     setNotice("");
+
     const previousCount = count;
     const optimisticCount = count + 1;
     setCount(optimisticCount);
@@ -131,12 +136,11 @@ export function ProblemCard({
         </div>
 
         <p className="mt-3 text-sm font-semibold text-ink">{count} подтверждений</p>
-        <p className="mt-1 text-sm leading-6 text-slate-800">
-          <span className="font-semibold">{problem.title}</span> {problem.clean_description}
-        </p>
-        <Link href={`/problems/${problem.id}`} className="mt-2 inline-block text-sm text-muted">
-          Открыть детали и обсуждение
-        </Link>
+        {!problem.photo_url ? (
+          <Link href={`/problems/${problem.id}`} className="mt-2 inline-block text-sm text-muted">
+            Открыть детали и обсуждение
+          </Link>
+        ) : null}
         {notice ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-muted">{notice}</p> : null}
       </section>
     </article>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORIES, STATUSES, type Problem, type ProblemStatus } from "@problema-est/shared";
 import { Check, RefreshCw, Save, X } from "lucide-react";
 import { labelStatus } from "@/lib/format";
@@ -28,43 +28,53 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<string>("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const passwordRef = useRef("");
+  const filterRef = useRef<AdminFilter>("pending");
 
   function getPassword() {
-    return password.trim() || sessionStorage.getItem(passwordKey) || "";
+    return password.trim() || passwordRef.current || sessionStorage.getItem(passwordKey) || "";
   }
 
-  async function load(nextFilter = filter, pass = getPassword()) {
+  async function load(nextFilter = filterRef.current, pass = getPassword(), silent = false) {
     if (!pass) {
       setError("Введите ADMIN_PASSWORD.");
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError("");
-    setMessage("");
+    if (!silent) setMessage("");
 
     try {
-      const response = await fetch(`/api/admin/problems?status=${nextFilter}`, {
+      const response = await fetch(`/api/admin/problems?status=${nextFilter}&t=${Date.now()}`, {
         cache: "no-store",
-        headers: { "x-admin-password": pass }
+        headers: {
+          "x-admin-password": pass,
+          "cache-control": "no-cache"
+        }
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Не удалось загрузить заявки.");
 
+      passwordRef.current = pass;
       setPassword(pass);
       sessionStorage.setItem(passwordKey, pass);
       setProblems(data.problems ?? []);
       setCounts(data.counts ?? {});
       setTotal(data.total ?? 0);
       setLoggedIn(true);
+      setLastLoadedAt(new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     } catch (err) {
-      setLoggedIn(false);
-      setProblems([]);
-      setError(err instanceof Error ? err.message : "Не удалось загрузить заявки.");
+      if (!silent) {
+        setLoggedIn(false);
+        setProblems([]);
+        setError(err instanceof Error ? err.message : "Не удалось загрузить заявки.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -82,9 +92,11 @@ export default function AdminPage() {
     try {
       const response = await fetch(`/api/admin/problems/${problem.id}`, {
         method: "PATCH",
+        cache: "no-store",
         headers: {
           "content-type": "application/json",
-          "x-admin-password": pass
+          "x-admin-password": pass,
+          "cache-control": "no-cache"
         },
         body: JSON.stringify(patch)
       });
@@ -92,20 +104,8 @@ export default function AdminPage() {
       if (!response.ok) throw new Error(data.error || "Не удалось сохранить изменения.");
 
       const updated = data.problem as Problem;
-      setCounts((current) => {
-        const next = { ...current };
-        if (problem.status !== updated.status) {
-          next[problem.status] = Math.max((next[problem.status] ?? 1) - 1, 0);
-          next[updated.status] = (next[updated.status] ?? 0) + 1;
-        }
-        return next;
-      });
-      setProblems((items) => {
-        const mapped = items.map((item) => (item.id === updated.id ? updated : item));
-        if (filter === "all") return mapped;
-        return mapped.filter((item) => item.status === filter);
-      });
       setMessage(`Сохранено: ${labelStatus(updated.status)}.`);
+      await load(filterRef.current, pass, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось сохранить изменения.");
     } finally {
@@ -114,6 +114,7 @@ export default function AdminPage() {
   }
 
   function changeFilter(nextFilter: AdminFilter) {
+    filterRef.current = nextFilter;
     setFilter(nextFilter);
     if (loggedIn) void load(nextFilter);
   }
@@ -121,6 +122,20 @@ export default function AdminPage() {
   useEffect(() => {
     const saved = sessionStorage.getItem(passwordKey);
     if (saved) void load("pending", saved);
+
+    const interval = window.setInterval(() => {
+      if (passwordRef.current) void load(filterRef.current, passwordRef.current, true);
+    }, 5000);
+
+    const onFocus = () => {
+      if (passwordRef.current) void load(filterRef.current, passwordRef.current, true);
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -135,6 +150,7 @@ export default function AdminPage() {
           <div className="rounded-lg border border-line bg-white px-4 py-3 text-sm text-muted">
             Всего: <span className="font-semibold text-ink">{total}</span> · На модерации:{" "}
             <span className="font-semibold text-ink">{counts.pending ?? 0}</span>
+            {lastLoadedAt ? <span> · Обновлено: {lastLoadedAt}</span> : null}
           </div>
         ) : null}
       </header>
@@ -147,11 +163,11 @@ export default function AdminPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") void load();
+            if (event.key === "Enter") void load(filter);
           }}
         />
         <button
-          onClick={() => void load()}
+          onClick={() => void load(filter)}
           disabled={loading}
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-5 font-semibold text-white disabled:opacity-60"
         >
