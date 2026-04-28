@@ -56,6 +56,7 @@ export type Problem = {
   moderation_reason: string | null;
   confirmations_count: number;
   created_by_telegram_id: string | null;
+  created_by_anonymous_key?: string | null;
 };
 
 export const statusLabel: Record<ProblemStatus, string> = {

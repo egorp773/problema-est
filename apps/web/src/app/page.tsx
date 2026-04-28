@@ -45,7 +45,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] px-0 pb-8">
+    <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] px-0 pb-28">
       <header className="sticky top-0 z-10 border-b border-line bg-white/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div>

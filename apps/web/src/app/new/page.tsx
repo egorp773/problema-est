@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ImagePlus, Send, X } from "lucide-react";
 import { CATEGORIES, type ProblemCategory } from "@problema-est/shared";
-import { getTelegramUserId } from "@/lib/telegram";
+import { ensureAnonymousKey, getTelegramUserId } from "@/lib/telegram";
 
 type ProblemForm = {
   city: string;
@@ -76,6 +76,7 @@ export default function NewProblemPage() {
 
     try {
       const uploadedPhotoUrls = await uploadPhotos();
+      const telegramUserId = getTelegramUserId();
       const response = await fetch("/api/problems", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -83,7 +84,8 @@ export default function NewProblemPage() {
           ...form,
           photo_url: uploadedPhotoUrls[0] || "",
           photo_urls: uploadedPhotoUrls,
-          created_by_telegram_id: getTelegramUserId()
+          created_by_telegram_id: telegramUserId,
+          created_by_anonymous_key: telegramUserId ? null : ensureAnonymousKey()
         })
       });
       const data = await response.json();
@@ -108,7 +110,7 @@ export default function NewProblemPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] px-4 py-6">
+    <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] px-4 pb-28 pt-6">
       <Link href="/" className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-brand">
         <ArrowLeft className="h-4 w-4" />
         Назад

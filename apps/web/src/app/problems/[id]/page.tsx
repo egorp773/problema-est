@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Eye, MessageCircle, Send } from "lucide-react";
 import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
 import { ensureAnonymousKey, getTelegramShareUrl, getTelegramUserId } from "@/lib/telegram";
@@ -62,6 +62,27 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
     }
   }
 
+  async function subscribe() {
+    setMessage("");
+    setError("");
+    try {
+      const telegramUserId = getTelegramUserId();
+      const response = await fetch(`/api/problems/${params.id}/subscribe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          telegram_user_id: telegramUserId,
+          anonymous_key: telegramUserId ? null : ensureAnonymousKey()
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setMessage(data.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось добавить проблему в отслеживаемые.");
+    }
+  }
+
   useEffect(() => {
     void load();
   }, [params.id]);
@@ -81,7 +102,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   const photos = getPhotos(problem);
 
   return (
-    <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] pb-8">
+    <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8fa] pb-28">
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-white/95 px-4 py-3 backdrop-blur">
         <Link href="/" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-line">
           <ArrowLeft className="h-5 w-5" />
@@ -116,6 +137,10 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
               <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
                 <MessageCircle className="h-7 w-7" />
                 Коммент.
+              </button>
+              <button onClick={subscribe} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
+                <Eye className="h-7 w-7" />
+                Следить
               </button>
             </div>
             <a

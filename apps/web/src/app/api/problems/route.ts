@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     const photoUrl = allPhotoUrls[0] || null;
     const desired = String(body.desired_result || "").trim();
     const telegramId = body.created_by_telegram_id ? String(body.created_by_telegram_id) : null;
+    const anonymousKey = body.created_by_anonymous_key ? String(body.created_by_anonymous_key) : null;
 
     if (!city || !address || !category || !rawDescription || !desired) {
       return NextResponse.json(
@@ -82,28 +83,52 @@ export async function POST(request: Request) {
       status: "pending",
       risk_flags: ai.risk_flags,
       moderation_reason: ai.moderation_reason,
-      created_by_telegram_id: telegramId
+      created_by_telegram_id: telegramId,
+      created_by_anonymous_key: telegramId ? null : anonymousKey
     };
 
-    const { data, error } = await supabase
+    let insertPayload = payload;
+    let { data, error } = await supabase
       .from("problems")
-      .insert(payload)
+      .insert(insertPayload)
       .select("id,status")
       .single();
 
     if (error) {
-      if (error.message.includes("photo_urls")) {
-        const { photo_urls: _photoUrls, ...legacyPayload } = payload;
-        const { data: legacyData, error: legacyError } = await supabase
+      if (error.message.includes("photo_urls") || error.message.includes("created_by_anonymous_key")) {
+        const { photo_urls: _photoUrls, created_by_anonymous_key: _anonymousKey, ...legacyPayload } = payload;
+        insertPayload = {
+          ...legacyPayload,
+          ...(error.message.includes("photo_urls") ? {} : { photo_urls: payload.photo_urls }),
+          ...(error.message.includes("created_by_anonymous_key") ? {} : { created_by_anonymous_key: payload.created_by_anonymous_key })
+        } as typeof payload;
+
+        const legacyInsert = await supabase
           .from("problems")
-          .insert(legacyPayload)
+          .insert(insertPayload)
           .select("id,status")
           .single();
-        if (legacyError) throw legacyError;
+
+        if (legacyInsert.error?.message.includes("photo_urls") || legacyInsert.error?.message.includes("created_by_anonymous_key")) {
+          const { photo_urls: _photoUrls2, created_by_anonymous_key: _anonymousKey2, ...smallestPayload } = payload;
+          const smallestInsert = await supabase
+            .from("problems")
+            .insert(smallestPayload)
+            .select("id,status")
+            .single();
+
+          if (smallestInsert.error) throw smallestInsert.error;
+          data = smallestInsert.data;
+        } else if (legacyInsert.error) {
+          throw legacyInsert.error;
+        } else {
+          data = legacyInsert.data;
+        }
+
         return NextResponse.json({
-          problem: legacyData,
+          problem: data,
           ai,
-          warning: "Колонка photo_urls ещё не добавлена в Supabase. Сохранено только первое фото."
+          warning: "В Supabase ещё не применены новые колонки. Данные сохранены в совместимом режиме."
         });
       }
       throw error;
