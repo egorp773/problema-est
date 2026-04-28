@@ -1,6 +1,7 @@
 const createdKey = "problema_est_created_problem_ids";
 const confirmedKey = "problema_est_confirmed_problem_ids";
 const followedKey = "problema_est_followed_problem_ids";
+const ownCommentsKey = "problema_est_own_comment_ids";
 
 function readList(key: string) {
   if (typeof window === "undefined") return [];
@@ -23,6 +24,12 @@ function addToList(key: string, id: string) {
   const cleanId = id.trim();
   if (!cleanId) return;
   writeList(key, [cleanId, ...readList(key)]);
+}
+
+function removeFromList(key: string, id: string) {
+  const cleanId = id.trim();
+  if (!cleanId) return;
+  writeList(key, readList(key).filter((item) => item !== cleanId));
 }
 
 function scanLegacy(prefix: string) {
@@ -48,9 +55,31 @@ export function rememberConfirmedProblem(id: string) {
   window.localStorage.setItem(`problem_confirmed_${id}`, "1");
 }
 
+export function forgetConfirmedProblem(id: string) {
+  removeFromList(confirmedKey, id);
+  window.localStorage.removeItem(`problem_confirmed_${id}`);
+}
+
 export function rememberFollowedProblem(id: string) {
   addToList(followedKey, id);
   window.localStorage.setItem(`problem_subscribed_${id}`, "1");
+}
+
+export function forgetFollowedProblem(id: string) {
+  removeFromList(followedKey, id);
+  window.localStorage.removeItem(`problem_subscribed_${id}`);
+}
+
+export function rememberOwnComment(id: string) {
+  addToList(ownCommentsKey, id);
+}
+
+export function forgetOwnComment(id: string) {
+  removeFromList(ownCommentsKey, id);
+}
+
+export function isOwnCommentLocally(id: string) {
+  return readList(ownCommentsKey).includes(id);
 }
 
 export function listCreatedProblemIds() {

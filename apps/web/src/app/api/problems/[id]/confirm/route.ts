@@ -4,6 +4,17 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+async function loadCount(problemId: string) {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from("problems")
+    .select("confirmations_count")
+    .eq("id", problemId)
+    .single();
+
+  return data?.confirmations_count ?? 0;
+}
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const body = await request.json();
@@ -57,6 +68,49 @@ export async function POST(request: Request, { params }: { params: { id: string 
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Не удалось подтвердить проблему" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const body = await request.json();
+    const telegramUserId = body.telegram_user_id ? String(body.telegram_user_id) : null;
+    const anonymousKey = body.anonymous_key ? String(body.anonymous_key) : null;
+
+    if (!telegramUserId && !anonymousKey) {
+      return NextResponse.json({ error: "Не удалось определить пользователя." }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    if (anonymousKey) {
+      const { error } = await supabase
+        .from("confirmations")
+        .delete()
+        .eq("problem_id", params.id)
+        .eq("anonymous_key", anonymousKey);
+      if (error) throw error;
+    }
+
+    if (telegramUserId) {
+      const { error } = await supabase
+        .from("confirmations")
+        .delete()
+        .eq("problem_id", params.id)
+        .eq("telegram_user_id", telegramUserId);
+      if (error) throw error;
+    }
+
+    return NextResponse.json({
+      removed: true,
+      message: "Лайк снят.",
+      confirmations_count: await loadCount(params.id)
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Не удалось снять лайк." },
       { status: 500 }
     );
   }

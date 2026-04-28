@@ -5,7 +5,14 @@ import Link from "next/link";
 import { Eye, Heart, MapPin, MessageCircle, MoreHorizontal, Send } from "lucide-react";
 import { type Problem } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
-import { isConfirmedLocally, isFollowedLocally, rememberConfirmedProblem, rememberFollowedProblem } from "@/lib/local-actions";
+import {
+  forgetConfirmedProblem,
+  forgetFollowedProblem,
+  isConfirmedLocally,
+  isFollowedLocally,
+  rememberConfirmedProblem,
+  rememberFollowedProblem
+} from "@/lib/local-actions";
 import { getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
 function getPhotos(problem: Problem) {
@@ -48,14 +55,18 @@ export function ProblemCard({
     setNotice("");
 
     const previousCount = count;
-    const optimisticCount = count + 1;
+    const wasConfirmed = confirmed;
+    const optimisticCount = wasConfirmed ? Math.max(count - 1, 0) : count + 1;
     setCount(optimisticCount);
     onConfirmed?.(problem.id, optimisticCount);
+    setConfirmed(!wasConfirmed);
+    if (wasConfirmed) forgetConfirmedProblem(problem.id);
+    else rememberConfirmedProblem(problem.id);
 
     try {
       const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${problem.id}/confirm`, {
-        method: "POST",
+        method: wasConfirmed ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           telegram_user_id: identity.telegramUserId,
@@ -67,12 +78,13 @@ export function ProblemCard({
 
       setCount(data.confirmations_count);
       onConfirmed?.(problem.id, data.confirmations_count);
-      setConfirmed(true);
-      rememberConfirmedProblem(problem.id);
-      setNotice(data.alreadyConfirmed ? "Вы уже подтверждали эту проблему." : "Вы подтвердили проблему.");
+      setNotice(wasConfirmed ? "Лайк снят." : data.alreadyConfirmed ? "Вы уже ставили лайк." : "Лайк поставлен.");
     } catch (error) {
       setCount(previousCount);
       onConfirmed?.(problem.id, previousCount);
+      setConfirmed(wasConfirmed);
+      if (wasConfirmed) rememberConfirmedProblem(problem.id);
+      else forgetConfirmedProblem(problem.id);
       setNotice(error instanceof Error ? error.message : "Не удалось подтвердить проблему.");
     } finally {
       setBusy(false);
@@ -83,13 +95,15 @@ export function ProblemCard({
     if (followBusy) return;
     setFollowBusy(true);
     setNotice("");
-    setFollowed(true);
-    rememberFollowedProblem(problem.id);
+    const wasFollowed = followed;
+    setFollowed(!wasFollowed);
+    if (wasFollowed) forgetFollowedProblem(problem.id);
+    else rememberFollowedProblem(problem.id);
 
     try {
       const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${problem.id}/subscribe`, {
-        method: "POST",
+        method: wasFollowed ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           telegram_user_id: identity.telegramUserId,
@@ -98,9 +112,11 @@ export function ProblemCard({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setNotice(data.alreadySubscribed ? "Вы уже следите за этой проблемой." : "Проблема добавлена в отслеживаемые.");
+      setNotice(wasFollowed ? "Слежение убрано." : data.alreadySubscribed ? "Вы уже следите за этой проблемой." : "Проблема добавлена в отслеживаемые.");
     } catch (error) {
-      setFollowed(isFollowedLocally(problem.id));
+      setFollowed(wasFollowed);
+      if (wasFollowed) rememberFollowedProblem(problem.id);
+      else forgetFollowedProblem(problem.id);
       setNotice(error instanceof Error ? error.message : "Не удалось добавить проблему в отслеживаемые.");
     } finally {
       setFollowBusy(false);
@@ -157,7 +173,7 @@ export function ProblemCard({
             <button
               onClick={followProblem}
               disabled={followBusy}
-              className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[10px] font-semibold disabled:opacity-50 ${
+              className={`inline-flex h-9 items-center gap-1 rounded-full px-3 text-[11px] font-semibold disabled:opacity-50 ${
                 followed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
               }`}
               aria-label="Следить"
@@ -168,14 +184,14 @@ export function ProblemCard({
             <button
               onClick={confirmProblem}
               disabled={busy}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink disabled:opacity-50"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-ink disabled:opacity-50"
               aria-label="Поддержать"
             >
               <Heart className={`h-4 w-4 ${confirmed || count > problem.confirmations_count ? "fill-brand text-brand" : ""}`} />
             </button>
             <Link
               href={`/problems/${problem.id}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-ink"
               aria-label="Комментарии"
             >
               <MessageCircle className="h-4 w-4" />
@@ -185,7 +201,7 @@ export function ProblemCard({
             href={getTelegramShareUrl(shareText)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[10px] font-semibold text-ink"
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-3 text-[11px] font-semibold text-ink"
           >
             <Send className="h-3.5 w-3.5" />
             Поделиться

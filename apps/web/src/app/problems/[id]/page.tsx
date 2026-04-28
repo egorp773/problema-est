@@ -2,10 +2,20 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Eye, Heart, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Eye, Heart, MessageCircle, Send, Trash2 } from "lucide-react";
 import { type Problem, type ProblemComment } from "@problema-est/shared";
 import { appUrl, labelStatus } from "@/lib/format";
-import { isConfirmedLocally, isFollowedLocally, rememberConfirmedProblem, rememberFollowedProblem } from "@/lib/local-actions";
+import {
+  forgetConfirmedProblem,
+  forgetFollowedProblem,
+  forgetOwnComment,
+  isConfirmedLocally,
+  isFollowedLocally,
+  isOwnCommentLocally,
+  rememberConfirmedProblem,
+  rememberFollowedProblem,
+  rememberOwnComment
+} from "@/lib/local-actions";
 import { getTelegramDisplayName, getTelegramIdentity, getTelegramShareUrl } from "@/lib/telegram";
 
 function getPhotos(problem: Problem) {
@@ -57,10 +67,21 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   async function confirm() {
     setMessage("");
     setError("");
+    const wasConfirmed = confirmed;
+    const previousCount = problem?.confirmations_count ?? 0;
+    setConfirmed(!wasConfirmed);
+    setProblem((current) =>
+      current
+        ? { ...current, confirmations_count: wasConfirmed ? Math.max(current.confirmations_count - 1, 0) : current.confirmations_count + 1 }
+        : current
+    );
+    if (wasConfirmed) forgetConfirmedProblem(params.id);
+    else rememberConfirmedProblem(params.id);
+
     try {
       const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${params.id}/confirm`, {
-        method: "POST",
+        method: wasConfirmed ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           telegram_user_id: identity.telegramUserId,
@@ -69,11 +90,13 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setMessage(data.message);
+      setMessage(wasConfirmed ? "Лайк снят." : data.message);
       setProblem((current) => current ? { ...current, confirmations_count: data.confirmations_count } : current);
-      setConfirmed(true);
-      rememberConfirmedProblem(params.id);
     } catch (err) {
+      setConfirmed(wasConfirmed);
+      setProblem((current) => current ? { ...current, confirmations_count: previousCount } : current);
+      if (wasConfirmed) rememberConfirmedProblem(params.id);
+      else forgetConfirmedProblem(params.id);
       setError(err instanceof Error ? err.message : "Не удалось подтвердить проблему");
     }
   }
@@ -81,10 +104,15 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   async function subscribe() {
     setMessage("");
     setError("");
+    const wasSubscribed = subscribed;
+    setSubscribed(!wasSubscribed);
+    if (wasSubscribed) forgetFollowedProblem(params.id);
+    else rememberFollowedProblem(params.id);
+
     try {
       const identity = await getTelegramIdentity();
       const response = await fetch(`/api/problems/${params.id}/subscribe`, {
-        method: "POST",
+        method: wasSubscribed ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           telegram_user_id: identity.telegramUserId,
@@ -93,10 +121,11 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setMessage(data.message);
-      setSubscribed(true);
-      rememberFollowedProblem(params.id);
+      setMessage(wasSubscribed ? "Слежение убрано." : data.message);
     } catch (err) {
+      setSubscribed(wasSubscribed);
+      if (wasSubscribed) rememberFollowedProblem(params.id);
+      else forgetFollowedProblem(params.id);
       setError(err instanceof Error ? err.message : "Не удалось добавить проблему в отслеживаемые.");
     }
   }
@@ -124,12 +153,42 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       if (!response.ok) throw new Error(data.error);
 
       setComments((current) => [...current, data.comment]);
+      if (data.comment?.id) rememberOwnComment(String(data.comment.id));
       setCommentText("");
       setMessage("Комментарий опубликован.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось сохранить комментарий.");
     } finally {
       setCommentBusy(false);
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    setMessage("");
+    setError("");
+
+    const previous = comments;
+    setComments((current) => current.filter((comment) => comment.id !== commentId));
+    forgetOwnComment(commentId);
+
+    try {
+      const identity = await getTelegramIdentity();
+      const response = await fetch(`/api/problems/${params.id}/comments`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          comment_id: commentId,
+          telegram_user_id: identity.telegramUserId,
+          anonymous_key: identity.anonymousKey
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setMessage("Комментарий удалён.");
+    } catch (err) {
+      setComments(previous);
+      rememberOwnComment(commentId);
+      setError(err instanceof Error ? err.message : "Не удалось удалить комментарий.");
     }
   }
 
@@ -184,7 +243,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <button
                 onClick={subscribe}
-                className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[10px] font-semibold ${
+                className={`inline-flex h-9 items-center gap-1 rounded-full px-3 text-[11px] font-semibold ${
                   subscribed ? "bg-teal-50 text-brand" : "bg-slate-50 text-ink"
                 }`}
               >
@@ -193,14 +252,14 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
               </button>
               <button
                 onClick={confirm}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-ink"
                 aria-label="Поддержать"
               >
                 <Heart className={`h-4 w-4 ${confirmed ? "fill-brand text-brand" : ""}`} />
               </button>
               <button
                 onClick={() => commentInputRef.current?.focus()}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-ink"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-ink"
                 aria-label="Комментарии"
               >
                 <MessageCircle className="h-4 w-4" />
@@ -210,7 +269,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
               href={getTelegramShareUrl(shareText)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-[10px] font-semibold text-ink"
+              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-3 text-[11px] font-semibold text-ink"
             >
               <Send className="h-3.5 w-3.5" />
               Поделиться
@@ -258,7 +317,14 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
               {comments.length === 0 ? (
                 <p className="rounded-xl bg-slate-50 p-3 text-sm text-muted">Комментариев пока нет.</p>
               ) : (
-                comments.map((comment) => <CommentItem key={comment.id} comment={comment} />)
+                comments.map((comment) => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment}
+                    canDelete={isOwnCommentLocally(comment.id)}
+                    onDelete={() => deleteComment(comment.id)}
+                  />
+                ))
               )}
             </div>
           </section>
@@ -271,7 +337,7 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
   );
 }
 
-function CommentItem({ comment }: { comment: ProblemComment }) {
+function CommentItem({ comment, canDelete, onDelete }: { comment: ProblemComment; canDelete: boolean; onDelete: () => void }) {
   return (
     <article className="flex gap-3 rounded-xl bg-slate-50 p-3">
       {comment.avatar_url ? (
@@ -283,11 +349,22 @@ function CommentItem({ comment }: { comment: ProblemComment }) {
         </div>
       )}
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-semibold text-ink">{comment.display_name || "Пользователь"}</p>
-          <time className="text-xs text-muted" dateTime={comment.created_at}>
-            {new Date(comment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })}
-          </time>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-ink">{comment.display_name || "Пользователь"}</p>
+            <time className="text-xs text-muted" dateTime={comment.created_at}>
+              {new Date(comment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })}
+            </time>
+          </div>
+          {canDelete ? (
+            <button
+              onClick={onDelete}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-muted"
+              aria-label="Удалить комментарий"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
         </div>
         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{comment.body}</p>
       </div>

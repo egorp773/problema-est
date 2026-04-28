@@ -94,3 +94,62 @@ export async function POST(request: Request, { params }: { params: { id: string 
     );
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const body = await request.json();
+    const telegramUserId = body.telegram_user_id ? String(body.telegram_user_id) : null;
+    const anonymousKey = body.anonymous_key ? String(body.anonymous_key) : null;
+
+    if (!telegramUserId && !anonymousKey) {
+      return NextResponse.json({ error: "Не удалось определить пользователя." }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    if (anonymousKey) {
+      const deleted = await supabase
+        .from("subscriptions")
+        .delete()
+        .eq("problem_id", params.id)
+        .eq("anonymous_key", anonymousKey);
+
+      if (deleted.error && !isSubscriptionsMissing(deleted.error)) throw deleted.error;
+    }
+
+    if (telegramUserId) {
+      const deleted = await supabase
+        .from("subscriptions")
+        .delete()
+        .eq("problem_id", params.id)
+        .eq("telegram_user_id", telegramUserId);
+
+      if (deleted.error && !isSubscriptionsMissing(deleted.error)) throw deleted.error;
+    }
+
+    const fallbackFilters = [];
+    if (anonymousKey) fallbackFilters.push({ anonymous_key: anonymousKey });
+    if (telegramUserId) fallbackFilters.push({ telegram_user_id: telegramUserId });
+
+    for (const filter of fallbackFilters) {
+      const { error } = await supabase
+        .from("admin_actions")
+        .delete()
+        .eq("problem_id", params.id)
+        .eq("action", "subscription")
+        .contains("details", filter);
+
+      if (error) throw error;
+    }
+
+    return NextResponse.json({
+      removed: true,
+      message: "Слежение убрано."
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Не удалось убрать слежение." },
+      { status: 500 }
+    );
+  }
+}
