@@ -38,7 +38,7 @@ const emptyData: ProfileData = {
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: "created", label: "Мои проблемы" },
-  { id: "confirmed", label: "Подтвердил" },
+  { id: "confirmed", label: "Поддержал" },
   { id: "followed", label: "Отслеживаю" }
 ];
 
@@ -130,7 +130,7 @@ export default function ProfilePage() {
 
       <section className="mt-4 grid grid-cols-2 gap-3">
         <StatCard label="Создано проблем" value={data.stats.created} />
-        <StatCard label="Подтверждено" value={data.stats.confirmed} />
+        <StatCard label="Поддержано" value={data.stats.confirmed} />
         <StatCard label="Отслеживается" value={data.stats.followed} />
         <StatCard label="Решено" value={data.stats.resolved} />
       </section>
@@ -180,7 +180,7 @@ function ProblemList({ tab, problems }: { tab: Tab; problems: Problem[] }) {
       tab === "created"
         ? "Вы пока не создавали проблемы."
         : tab === "confirmed"
-          ? "Вы пока не подтверждали проблемы."
+          ? "Вы пока не поддерживали проблемы."
           : "Вы пока не отслеживаете проблемы.";
 
     return (

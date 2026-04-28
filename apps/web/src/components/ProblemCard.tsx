@@ -78,7 +78,7 @@ export function ProblemCard({
 
       setCount(data.confirmations_count);
       onConfirmed?.(problem.id, data.confirmations_count);
-      setNotice(wasConfirmed ? "Лайк снят." : data.alreadyConfirmed ? "Вы уже ставили лайк." : "Лайк поставлен.");
+      setNotice("");
     } catch (error) {
       setCount(previousCount);
       onConfirmed?.(problem.id, previousCount);
@@ -112,7 +112,7 @@ export function ProblemCard({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setNotice(wasFollowed ? "Слежение убрано." : data.alreadySubscribed ? "Вы уже следите за этой проблемой." : "Проблема добавлена в отслеживаемые.");
+      setNotice("");
     } catch (error) {
       setFollowed(wasFollowed);
       if (wasFollowed) rememberFollowedProblem(problem.id);

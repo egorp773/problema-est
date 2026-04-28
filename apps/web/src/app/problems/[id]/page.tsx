@@ -90,7 +90,6 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setMessage(wasConfirmed ? "Лайк снят." : data.message);
       setProblem((current) => current ? { ...current, confirmations_count: data.confirmations_count } : current);
     } catch (err) {
       setConfirmed(wasConfirmed);
@@ -121,7 +120,6 @@ export default function ProblemPage({ params }: { params: { id: string } }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setMessage(wasSubscribed ? "Слежение убрано." : data.message);
     } catch (err) {
       setSubscribed(wasSubscribed);
       if (wasSubscribed) rememberFollowedProblem(params.id);
